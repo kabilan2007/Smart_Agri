@@ -34,15 +34,46 @@ class MarketService:
         return "Tamil Nadu"
 
     @staticmethod
+    def _detect_district_from_coords(lat: Optional[float], lon: Optional[float], district_param: Optional[str] = None) -> Optional[str]:
+        if district_param and district_param.strip():
+            return district_param.strip()
+        if lat is None or lon is None:
+            return None
+        # Coimbatore region
+        if 10.8 <= lat <= 11.2 and 76.8 <= lon <= 77.2:
+            return "Coimbatore"
+        # Tiruppur
+        elif 11.0 <= lat <= 11.3 and 77.2 <= lon <= 77.6:
+            return "Tiruppur"
+        # Erode
+        elif 11.2 <= lat <= 11.6 and 77.5 <= lon <= 77.9:
+            return "Erode"
+        # Salem
+        elif 11.5 <= lat <= 11.9 and 78.0 <= lon <= 78.4:
+            return "Salem"
+        # Dindigul / Oddanchatram
+        elif 10.2 <= lat <= 10.6 and 77.6 <= lon <= 78.1:
+            return "Dindigul"
+        # Nilgiris / Mettupalayam
+        elif 11.2 <= lat <= 11.6 and 76.6 <= lon <= 77.0:
+            return "Nilgiris"
+        # Thanjavur / Delta
+        elif 10.6 <= lat <= 11.0 and 78.9 <= lon <= 79.4:
+            return "Thanjavur"
+        return None
+
+    @staticmethod
     def get_live_market_rates(
         category: Optional[str] = None,
         query: Optional[str] = None,
         lat: Optional[float] = None,
         lon: Optional[float] = None,
-        state: Optional[str] = None
+        state: Optional[str] = None,
+        district: Optional[str] = None
     ) -> MarketRatesResponse:
         today_str = datetime.date.today().strftime("%d %b %Y")
         user_state = MarketService._detect_state_from_coords(lat, lon, state)
+        user_district = MarketService._detect_district_from_coords(lat, lon, district)
         
         all_commodities = [
             # ================= TAMIL NADU MANDIS =================
@@ -321,16 +352,34 @@ class MarketService:
             q = query.lower()
             filtered = [c for c in filtered if q in c.commodity.lower() or q in c.mandi_name.lower() or q in c.state.lower()]
 
-        # PRIORITIZE User's Local State Mandis at the top
+        # PRIORITIZE User's Local District and State Mandis at the top
         user_state_lower = user_state.lower()
-        local_mandis = [c for c in filtered if user_state_lower in c.state.lower()]
-        other_mandis = [c for c in filtered if user_state_lower not in c.state.lower()]
-        sorted_commodities = local_mandis + other_mandis
+        user_district_lower = user_district.lower() if user_district else ""
 
-        if "tamil nadu" in user_state_lower:
+        district_mandis = []
+        state_mandis = []
+        other_mandis = []
+
+        for c in filtered:
+            mandi_text = f"{c.mandi_name} {c.commodity}".lower()
+            if user_district_lower and user_district_lower in mandi_text:
+                district_mandis.append(c)
+            elif user_state_lower in c.state.lower():
+                state_mandis.append(c)
+            else:
+                other_mandis.append(c)
+
+        sorted_commodities = district_mandis + state_mandis + other_mandis
+
+        if user_district:
+            overview = (
+                f"Live {user_district} & {user_state} Mandi Index: Prioritizing local arrivals and modal rates "
+                f"for markets in {user_district} district. High liquidity in fresh farm produce."
+            )
+        elif "tamil nadu" in user_state_lower:
             overview = (
                 f"Live Tamil Nadu & Agmarknet Mandi Index: Heavy trading across Coimbatore, Oddanchatram, "
-                f"Mettupalayam, Tiruppur and Erode mandis. Turmeric, Shallots, and Nilgiris Vegetables showing strong local farmer demand."
+                f"Mettupalayam, Tiruppur, and Erode mandis. Turmeric, Shallots, and Vegetables in high demand."
             )
         else:
             overview = (

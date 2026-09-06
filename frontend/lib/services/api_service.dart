@@ -12,7 +12,7 @@ class ApiService {
   // Android Emulator: http://10.0.2.2:8000
   // iOS Simulator: http://localhost:8000
   // Physical Device (same WiFi): http://<YOUR_LOCAL_IP>:8000
-  static const String _baseUrl = 'http://10.14.28.87:8000';
+  static const String _baseUrl = 'https://smart-agri-backend-6efw.onrender.com';
 
   static Uri _uri(String path, [Map<String, String>? queryParams]) {
     return Uri.parse('$_baseUrl$path').replace(queryParameters: queryParams);
@@ -143,6 +143,7 @@ class ApiService {
     double? lat,
     double? lon,
     String? state,
+    String? district,
   }) async {
     try {
       final params = <String, String>{};
@@ -151,6 +152,7 @@ class ApiService {
       if (lat != null) params['lat'] = lat.toString();
       if (lon != null) params['lon'] = lon.toString();
       if (state != null && state.isNotEmpty) params['state'] = state;
+      if (district != null && district.isNotEmpty) params['district'] = district;
 
       final response = await http
           .get(_uri('/api/market-rates', params.isEmpty ? null : params),

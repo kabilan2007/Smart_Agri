@@ -21,6 +21,8 @@ class _MarketRatesScreenState extends State<MarketRatesScreen>
   MarketRatesResponse? _data;
   bool _isLoading = true;
   String _selectedCategory = 'All';
+  String _selectedDistrict = 'All Nearby';
+  String? _detectedDistrict;
   final TextEditingController _searchController = TextEditingController();
   late TabController _tabController;
   double? _lat;
@@ -33,6 +35,17 @@ class _MarketRatesScreenState extends State<MarketRatesScreen>
     'Pulses',
     'Spices',
     'Cash Crops',
+  ];
+
+  final List<String> _districts = [
+    'All Nearby',
+    'Coimbatore',
+    'Tiruppur',
+    'Oddanchatram / Dindigul',
+    'Mettupalayam / Nilgiris',
+    'Erode',
+    'Salem',
+    'Thanjavur',
   ];
 
   @override
@@ -66,6 +79,19 @@ class _MarketRatesScreenState extends State<MarketRatesScreen>
         }
       } catch (_) {}
     }
+
+    if (_lat != null && _lon != null) {
+      try {
+        final place = await LocationService.getPlaceName(_lat!, _lon!);
+        if (place != null && mounted) {
+          final districtName = place.split(',').first.trim();
+          setState(() {
+            _detectedDistrict = districtName;
+          });
+        }
+      } catch (_) {}
+    }
+
     _fetchMarketData();
   }
 
@@ -79,11 +105,16 @@ class _MarketRatesScreenState extends State<MarketRatesScreen>
   Future<void> _fetchMarketData({String? query}) async {
     if (!mounted) return;
     setState(() => _isLoading = true);
+    final districtParam = _selectedDistrict == 'All Nearby'
+        ? _detectedDistrict
+        : _selectedDistrict.split(' / ').first;
+
     final data = await ApiService.getMarketRates(
       category: _selectedCategory == 'All' ? null : _selectedCategory,
       query: query,
       lat: _lat,
       lon: _lon,
+      district: districtParam,
     );
     if (!mounted) return;
     setState(() {
@@ -105,13 +136,17 @@ class _MarketRatesScreenState extends State<MarketRatesScreen>
           icon: const Icon(Icons.arrow_back_ios_rounded),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Live Mandi Rates',
+            const Text('Live Mandi Rates',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            Text('e-NAM / Agmarknet Market Index',
-                style: TextStyle(fontSize: 10.5, color: AgriColors.textMuted)),
+            Text(
+              _detectedDistrict != null
+                  ? '📍 Live Mandis near $_detectedDistrict'
+                  : 'e-NAM / Agmarknet Market Index',
+              style: const TextStyle(fontSize: 10.5, color: AgriColors.textMuted),
+            ),
           ],
         ),
         actions: [
@@ -121,16 +156,16 @@ class _MarketRatesScreenState extends State<MarketRatesScreen>
           ),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(90),
+          preferredSize: const Size.fromHeight(132),
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
                 child: TextField(
                   controller: _searchController,
                   onChanged: (v) => _fetchMarketData(query: v),
                   decoration: InputDecoration(
-                    hintText: 'Search commodity or mandi...',
+                    hintText: 'Search commodity, mandi or district...',
                     prefixIcon: const Icon(Icons.search_rounded,
                         color: AgriColors.textMuted, size: 20),
                     filled: true,
@@ -145,9 +180,56 @@ class _MarketRatesScreenState extends State<MarketRatesScreen>
                   ),
                 ),
               ),
+              // District Chips Row
+              SizedBox(
+                height: 34,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _districts.length,
+                  itemBuilder: (_, i) {
+                    final d = _districts[i];
+                    final isSel = _selectedDistrict == d;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ChoiceChip(
+                        label: Text(
+                          i == 0 && _detectedDistrict != null ? '📍 $_detectedDistrict (GPS)' : d,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            color: isSel ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                          ),
+                        ),
+                        selected: isSel,
+                        selectedColor: AgriColors.primaryGreen,
+                        backgroundColor: isDark ? AgriColors.cardDark : Colors.white,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() => _selectedDistrict = d);
+                            _fetchMarketData(query: _searchController.text);
+                          }
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
               TabBar(
                 controller: _tabController,
                 isScrollable: true,
+                labelColor: AgriColors.primaryGreen,
+                unselectedLabelColor: AgriColors.textMuted,
+                indicatorColor: AgriColors.primaryGreen,
+                indicatorWeight: 2.5,
+                labelStyle: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 12.5),
+                tabs: _categories.map((c) => Tab(text: c)).toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
                 labelColor: AgriColors.primaryGreen,
                 unselectedLabelColor: AgriColors.textMuted,
                 indicatorColor: AgriColors.primaryGreen,

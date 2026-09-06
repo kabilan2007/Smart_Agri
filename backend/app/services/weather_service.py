@@ -383,7 +383,7 @@ class WeatherService:
     ) -> List[WeatherAlertItem]:
         alerts: List[WeatherAlertItem] = []
 
-        # 1. Heavy Rain & Inundation Warning: Triggered ONLY if high rainfall (>10mm) or violent downpour/thunderstorm
+        # 1. Heavy Rain & Inundation Warning (>10mm or severe downpour)
         is_severe_rain = (rain_24h_mm >= 10.0 and rain_prob_24h >= 70) or weather_code in (65, 82, 95, 96, 99) or rain_3d >= 35.0
         if is_severe_rain:
             rain_amount_str = f"{rain_24h_mm:.1f}mm" if rain_24h_mm > 0 else "Heavy downpour"
@@ -395,18 +395,29 @@ class WeatherService:
                 icon="cloud-rain"
             ))
 
-        # 2. High Wind Velocity / Storm Alert: Triggered ONLY if gusts > 40 km/h or wind speed > 35 km/h
-        if wind_gusts >= 40.0 or wind_speed >= 35.0 or weather_code in (95, 96, 99):
-            peak_wind = max(wind_gusts, wind_speed)
+        # 2. Wind Speed > 15 km/h: Warning for Crop Spraying & Drift
+        if wind_speed > 15.0 or wind_gusts >= 30.0:
+            effective_wind = max(wind_speed, wind_gusts)
             alerts.append(WeatherAlertItem(
                 level="warning",
-                title="💨 High Wind Velocity Alert",
-                message=f"Strong wind gusts reaching {peak_wind:.1f} km/h may cause lodging in tall standing crops.",
-                action_required="Provide earthing-up and bamboo staking support for banana, papaya, sugarcane, and tomato trellises.",
+                title="💨 High Wind Warning (Spraying Hazard)",
+                message=f"Wind speed is {wind_speed:.1f} km/h (gusts up to {effective_wind:.1f} km/h, exceeding safe 15 km/h limit). High spray drift risk.",
+                action_required="Postpone all foliar nutrition, pesticide, and herbicide spraying until wind speeds drop below 15 km/h.",
                 icon="wind"
             ))
 
-        # 3. Fungal Blast & Blight Risk: Triggered ONLY when there is actual persistent rain (>= 5mm) with extreme humidity (>= 85%)
+        # 3. Rainfall / High Humidity: Alert to Stop Irrigation
+        is_rainy_or_humid = (rain_24h_mm >= 2.0) or (humidity >= 80) or is_rain_24h or weather_code in (51, 53, 55, 61, 63, 65, 80, 81, 82, 95)
+        if is_rainy_or_humid and not is_severe_rain:
+            alerts.append(WeatherAlertItem(
+                level="advisory",
+                title="🌧️ Rain / High Humidity Alert (Halt Irrigation)",
+                message=f"Rainfall ({rain_24h_mm:.1f}mm) or elevated humidity ({humidity}%) detected. Soil moisture is sufficient.",
+                action_required="Stop all drip, sprinkler, and canal irrigation to prevent root asphyxiation, fungal infection, and nutrient leaching.",
+                icon="cloud-rain"
+            ))
+
+        # 4. Fungal Blast & Blight Risk (high humidity >= 85% with moisture)
         if humidity >= 85 and rain_24h_mm >= 5.0 and 20.0 <= temp <= 32.0:
             alerts.append(WeatherAlertItem(
                 level="warning",
@@ -416,7 +427,7 @@ class WeatherService:
                 icon="shield-alert"
             ))
 
-        # 4. Severe Heatwave Hazard: Triggered ONLY on extreme temperatures (>= 38.5°C)
+        # 5. Severe Heatwave Hazard (>= 38.5°C)
         if temp >= 38.5:
             alerts.append(WeatherAlertItem(
                 level="advisory",
@@ -426,6 +437,15 @@ class WeatherService:
                 icon="sun"
             ))
 
-        # Under normal pleasant/moderate conditions: return clean empty list (NO fake emergency cards)
+        # 6. Otherwise: Optimal Farming Conditions
+        if not alerts:
+            alerts.append(WeatherAlertItem(
+                level="optimal",
+                title="🌿 Optimal Farming Conditions",
+                message=f"Clear and favorable weather (Temp: {temp:.1f}°C, Humidity: {humidity}%, Wind: {wind_speed:.1f} km/h).",
+                action_required="Excellent window for sowing, weeding, fertilizer application, pesticide spraying, and general field irrigation.",
+                icon="check-circle"
+            ))
+
         return alerts
 

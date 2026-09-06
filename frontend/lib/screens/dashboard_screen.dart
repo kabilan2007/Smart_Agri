@@ -650,7 +650,35 @@ class _DashboardScreenState extends State<DashboardScreen>
           ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1, end: 0),
           const SizedBox(height: 14),
           // Dynamic Localized Alerts List
-          ...w.alerts.map((alert) => _buildAlertCard(alert, isDark, loc)),
+          ...(w.alerts.isNotEmpty
+                  ? w.alerts
+                  : [
+                      if (w.windSpeedKmh > 15.0)
+                        WeatherAlertItem(
+                          level: 'warning',
+                          title: '💨 High Wind Warning (Spraying Hazard)',
+                          message: 'Wind speed is ${w.windSpeedKmh.toStringAsFixed(1)} km/h (> 15 km/h limit). High spray drift risk.',
+                          actionRequired: 'Postpone all pesticide and foliar spraying until wind speeds drop below 15 km/h.',
+                          icon: 'wind',
+                        )
+                      else if (w.isRainExpected24h || w.humidity >= 80 || w.totalRainForecast3daysMm > 0)
+                        WeatherAlertItem(
+                          level: 'advisory',
+                          title: '🌧️ Rain / High Humidity Alert (Halt Irrigation)',
+                          message: 'High humidity (${w.humidity}%) or rain detected. Soil moisture is sufficient.',
+                          actionRequired: 'Stop all drip, sprinkler, and canal irrigation to prevent root rot.',
+                          icon: 'cloud-rain',
+                        )
+                      else
+                        WeatherAlertItem(
+                          level: 'optimal',
+                          title: '🌿 Optimal Farming Conditions',
+                          message: 'Favorable weather conditions for field operations.',
+                          actionRequired: 'Good window for spraying, sowing, fertilizing, and standard irrigation.',
+                          icon: 'check-circle',
+                        )
+                    ])
+              .map((alert) => _buildAlertCard(alert, isDark, loc)),
         ],
       ),
     );
@@ -773,7 +801,11 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   String _getLocalizedAlertTitle(String rawTitle, LocalizationService loc) {
     final t = rawTitle.toLowerCase();
-    if (t.contains('heavy rain') || t.contains('rain') || t.contains('inundation')) {
+    if (t.contains('spray') || (t.contains('wind') && t.contains('hazard'))) {
+      return loc.tr('alert_wind_spray_title');
+    } else if (t.contains('irrigation') || (t.contains('rain') && t.contains('halt'))) {
+      return loc.tr('alert_irrigation_halt_title');
+    } else if (t.contains('heavy rain') || t.contains('inundation')) {
       return loc.tr('alert_heavy_rain_title');
     } else if (t.contains('fungal') || t.contains('blast') || t.contains('blight') || t.contains('leaf spot')) {
       return loc.tr('alert_fungal_title');
@@ -781,7 +813,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       return loc.tr('alert_wind_title');
     } else if (t.contains('heat') || t.contains('evapotranspiration') || t.contains('temperature')) {
       return loc.tr('alert_heat_title');
-    } else if (t.contains('optimal') || t.contains('window') || t.contains('safe') || t.contains('favorable')) {
+    } else if (t.contains('optimal') || t.contains('window') || t.contains('safe') || t.contains('favorable') || t.contains('condition')) {
       return loc.tr('alert_optimal_title');
     }
     return rawTitle;
@@ -789,7 +821,11 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   String _getLocalizedAlertMessage(String rawTitle, String rawMsg, LocalizationService loc) {
     final t = rawTitle.toLowerCase();
-    if (t.contains('heavy rain') || t.contains('rain') || t.contains('inundation')) {
+    if (t.contains('spray') || (t.contains('wind') && t.contains('hazard'))) {
+      return loc.tr('alert_wind_spray_msg');
+    } else if (t.contains('irrigation') || (t.contains('rain') && t.contains('halt'))) {
+      return loc.tr('alert_irrigation_halt_msg');
+    } else if (t.contains('heavy rain') || t.contains('inundation')) {
       return loc.tr('alert_heavy_rain_msg');
     } else if (t.contains('fungal') || t.contains('blast') || t.contains('blight')) {
       return loc.tr('alert_fungal_msg');
@@ -797,7 +833,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       return loc.tr('alert_wind_msg');
     } else if (t.contains('heat') || t.contains('evapotranspiration')) {
       return loc.tr('alert_heat_msg');
-    } else if (t.contains('optimal') || t.contains('window') || t.contains('safe')) {
+    } else if (t.contains('optimal') || t.contains('window') || t.contains('safe') || t.contains('condition')) {
       return loc.tr('alert_optimal_msg');
     }
     return rawMsg;
@@ -805,7 +841,11 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   String _getLocalizedAlertAction(String rawTitle, String rawAction, LocalizationService loc) {
     final t = rawTitle.toLowerCase();
-    if (t.contains('heavy rain') || t.contains('rain') || t.contains('inundation')) {
+    if (t.contains('spray') || (t.contains('wind') && t.contains('hazard'))) {
+      return loc.tr('alert_wind_spray_action');
+    } else if (t.contains('irrigation') || (t.contains('rain') && t.contains('halt'))) {
+      return loc.tr('alert_irrigation_halt_action');
+    } else if (t.contains('heavy rain') || t.contains('inundation')) {
       return loc.tr('alert_heavy_rain_action');
     } else if (t.contains('fungal') || t.contains('blast') || t.contains('blight')) {
       return loc.tr('alert_fungal_action');
@@ -813,7 +853,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       return loc.tr('alert_wind_action');
     } else if (t.contains('heat') || t.contains('evapotranspiration')) {
       return loc.tr('alert_heat_action');
-    } else if (t.contains('optimal') || t.contains('window') || t.contains('safe')) {
+    } else if (t.contains('optimal') || t.contains('window') || t.contains('safe') || t.contains('condition')) {
       return loc.tr('alert_optimal_action');
     }
     return rawAction;

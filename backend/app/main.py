@@ -141,11 +141,12 @@ async def get_market_rates(
     query: Optional[str] = Query(None, description="Search term for crop or mandi"),
     lat: Optional[float] = Query(None, description="Farmer GPS Latitude"),
     lon: Optional[float] = Query(None, description="Farmer GPS Longitude"),
-    state: Optional[str] = Query(None, description="Farmer State/Region")
+    state: Optional[str] = Query(None, description="Farmer State/Region"),
+    district: Optional[str] = Query(None, description="Farmer District/City")
 ):
     """
     Real-time agricultural commodity prices, mandi rates, and daily price trends (UP/DOWN/STABLE).
-    Prioritizes local state mandis (e.g. Tamil Nadu: Coimbatore, Oddanchatram, Mettupalayam, Tiruppur) based on coordinates.
+    Prioritizes local district & state mandis based on live GPS coordinates.
     """
     try:
         response = MarketService.get_live_market_rates(
@@ -153,7 +154,8 @@ async def get_market_rates(
             query=query,
             lat=lat,
             lon=lon,
-            state=state
+            state=state,
+            district=district
         )
         return response
     except Exception as e:
