@@ -1,0 +1,163 @@
+import os
+from typing import Optional
+from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.config import settings
+from app.models.schemas import (
+    WeatherAlertsResponse,
+    CropRecommendationRequest,
+    CropRecommendationResponse,
+    AgriChatRequest,
+    AgriChatResponse,
+    DiseaseDetectionResponse,
+    MarketRatesResponse,
+)
+from app.services.weather_service import WeatherService
+from app.services.crop_recommendation_service import CropRecommendationService
+from app.services.gemini_service import GeminiService
+from app.services.disease_detection_service import DiseaseDetectionService
+from app.services.market_service import MarketService
+
+app = FastAPI(
+    title="Smart Agri - Intelligent AI Agricultural Engine",
+    description="Full-stack AI backend powering modern agricultural solutions for young and progressive farmers.",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+# Enable CORS for Mobile App connections
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/", tags=["General"])
+async def root():
+    return {
+        "status": "online",
+        "service": "Smart Agri AI Backend",
+        "version": settings.APP_VERSION,
+        "docs": "/docs",
+        "endpoints": [
+            "/api/weather-alerts",
+            "/api/crop-recommendation",
+            "/api/agri-chat",
+            "/api/disease-detection",
+            "/api/market-rates"
+        ]
+    }
+
+@app.get("/health", tags=["General"])
+async def health_check():
+    return {"status": "healthy", "gemini_configured": bool(settings.GEMINI_API_KEY), "weather_configured": bool(settings.OPENWEATHER_API_KEY)}
+
+# ----------------- 1. Weather & Risk Alerts -----------------
+@app.get("/api/weather-alerts", response_model=WeatherAlertsResponse, tags=["Weather & Alerts"])
+async def get_weather_alerts(
+    lat: float = Query(11.6643, description="Farmer's GPS Latitude (Default Salem/Tamil Nadu)"),
+    lon: float = Query(78.1460, description="Farmer's GPS Longitude (Default Salem/Tamil Nadu)")
+):
+    """
+    Fetches real-time weather analytics, reverse geocoded city/district,
+    and generates automated agricultural risk alerts (Heavy rain, Fungal risk, Heatwave, Wind damage).
+    """
+    try:
+        response = await WeatherService.get_weather_and_alerts(lat, lon)
+        return response
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch weather alerts: {str(e)}"
+        )
+
+# ----------------- 2. AI Crop Recommendation -----------------
+@app.post("/api/crop-recommendation", response_model=CropRecommendationResponse, tags=["Crop Recommendation"])
+async def recommend_crops(request: CropRecommendationRequest):
+    """
+    Recommends high-yielding, profitable crops based on detected Season,
+    Soil Profile, and Water conditions with strict rule checks (e.g., avoiding water-guzzling crops in dry spells).
+    """
+    try:
+        response = CropRecommendationService.recommend_crops(request)
+        return response
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Crop recommendation failed: {str(e)}"
+        )
+
+# ----------------- 3. Universal Agri & Soil Chatbot -----------------
+@app.post("/api/agri-chat", response_model=AgriChatResponse, tags=["AI Chatbot"])
+async def agri_chat(request: AgriChatRequest):
+    """
+    24/7 Soil & Agricultural AI Assistant powered by Google Gemini.
+    Provides expert advice on soil pH balancing, organic inputs (Panchagavya, Vermicompost),
+    pest & disease IPM, irrigation, and government subsidies.
+    """
+    try:
+        response = await GeminiService.chat(request)
+        return response
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Chatbot failed: {str(e)}"
+        )
+
+# ----------------- 4. AI Plant Disease Detection -----------------
+@app.post("/api/disease-detection", response_model=DiseaseDetectionResponse, tags=["Plant Disease Computer Vision"])
+async def detect_plant_disease(
+    file: UploadFile = File(..., description="Leaf or infected plant image")
+):
+    """
+    Computer Vision model (Gemini Vision) that diagnoses leaf diseases,
+    evaluates severity, and provides step-by-step organic remedies and chemical fungicides with exact dosages.
+    """
+    try:
+        image_bytes = await file.read()
+        if not image_bytes:
+            raise HTTPException(status_code=400, detail="Empty image file received.")
+            
+        response = await DiseaseDetectionService.analyze_leaf_image(
+            image_bytes=image_bytes,
+            filename=file.filename
+        )
+        return response
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Disease detection failed: {str(e)}"
+        )
+
+# ----------------- 5. Live Market Rates (e-NAM / Agmarknet) -----------------
+@app.get("/api/market-rates", response_model=MarketRatesResponse, tags=["Market Rates"])
+async def get_market_rates(
+    category: Optional[str] = Query(None, description="Vegetables, Grains, Cash Crops, Pulses, Spices, or All"),
+    query: Optional[str] = Query(None, description="Search term for crop or mandi"),
+    lat: Optional[float] = Query(None, description="Farmer GPS Latitude"),
+    lon: Optional[float] = Query(None, description="Farmer GPS Longitude"),
+    state: Optional[str] = Query(None, description="Farmer State/Region")
+):
+    """
+    Real-time agricultural commodity prices, mandi rates, and daily price trends (UP/DOWN/STABLE).
+    Prioritizes local state mandis (e.g. Tamil Nadu: Coimbatore, Oddanchatram, Mettupalayam, Tiruppur) based on coordinates.
+    """
+    try:
+        response = MarketService.get_live_market_rates(
+            category=category,
+            query=query,
+            lat=lat,
+            lon=lon,
+            state=state
+        )
+        return response
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch market rates: {str(e)}"
+        )

@@ -1,0 +1,48 @@
+<!--
+  Smart Agri - iOS Info.plist Privacy Permissions
+  Add these key-value pairs inside the <dict> tag of:
+    frontend/ios/Runner/Info.plist
+-->
+
+<!-- ==================== LOCATION ==================== -->
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>Smart Agri needs your location to provide accurate weather alerts and crop recommendations for your farm area.</string>
+
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>Smart Agri uses background location to send timely weather alerts relevant to your farm.</string>
+
+<!-- ==================== CAMERA ==================== -->
+<key>NSCameraUsageDescription</key>
+<string>Smart Agri uses the camera to photograph plant leaves for AI disease detection and treatment advice.</string>
+
+<!-- ==================== PHOTO LIBRARY ==================== -->
+<key>NSPhotoLibraryUsageDescription</key>
+<string>Smart Agri can access your photo library to analyze plant images for disease identification.</string>
+
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>Smart Agri may save scanned plant images to your photo library.</string>
+
+<!-- ==================== MICROPHONE / VOICE ==================== -->
+<key>NSMicrophoneUsageDescription</key>
+<string>Smart Agri uses the microphone to listen to your voice queries for the AI agricultural assistant.</string>
+
+<key>NSSpeechRecognitionUsageDescription</key>
+<string>Smart Agri uses speech recognition to convert your voice questions into text for the AI assistant, supporting English, Tamil, Hindi, Telugu, Kannada, Malayalam, and Chinese.</string>
+
+<!-- ==================== ATS (Allow HTTP for dev) ==================== -->
+<!-- Remove this block in production and switch backend to HTTPS -->
+<key>NSAppTransportSecurity</key>
+<dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+    <!-- Or restrict to only your dev server:
+    <key>NSExceptionDomains</key>
+    <dict>
+        <key>localhost</key>
+        <dict>
+            <key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
+            <true/>
+        </dict>
+    </dict>
+    -->
+</dict>
