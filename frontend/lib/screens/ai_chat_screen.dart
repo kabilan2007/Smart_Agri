@@ -7,6 +7,7 @@ import '../constants/colors.dart';
 import '../models/chat_message_model.dart';
 import '../services/api_service.dart';
 import '../services/localization_service.dart';
+import '../services/location_service.dart';
 import '../services/tts_stt_service.dart';
 
 class AiChatScreen extends StatefulWidget {
