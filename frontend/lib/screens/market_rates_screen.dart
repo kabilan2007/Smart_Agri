@@ -230,18 +230,7 @@ class _MarketRatesScreenState extends State<MarketRatesScreen>
           ),
         ),
       ),
-                labelColor: AgriColors.primaryGreen,
-                unselectedLabelColor: AgriColors.textMuted,
-                indicatorColor: AgriColors.primaryGreen,
-                indicatorWeight: 2.5,
-                labelStyle: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 12.5),
-                tabs: _categories.map((c) => Tab(text: c)).toList(),
-              ),
-            ],
-          ),
-        ),
-      ),
+               
       body: RefreshIndicator(
         color: AgriColors.primaryGreen,
         onRefresh: () => _fetchMarketData(query: _searchController.text),
