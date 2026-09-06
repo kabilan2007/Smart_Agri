@@ -235,7 +235,7 @@ class MarketService:
                 last_updated="Today, 08:45 AM"
             ),
 
-            # ================= OTHER REGIONAL MANDIS =================
+            # ================= KARNATAKA MANDIS =================
             MarketItem(
                 commodity="Tomato (Hybrid)",
                 category="Vegetables",
@@ -248,58 +248,6 @@ class MarketService:
                 price_trend="UP",
                 price_change_24h_pct=12.5,
                 last_updated="Today, 08:30 AM"
-            ),
-            MarketItem(
-                commodity="Onion (Nashik Red)",
-                category="Vegetables",
-                mandi_name="Lasalgaon APMC",
-                state="Maharashtra",
-                unit="₹ / Quintal",
-                modal_price=2450.0,
-                min_price=1800.0,
-                max_price=2750.0,
-                price_trend="DOWN",
-                price_change_24h_pct=-3.8,
-                last_updated="Today, 09:15 AM"
-            ),
-            MarketItem(
-                commodity="Green Chilli (G4 Teja)",
-                category="Vegetables",
-                mandi_name="Guntur Mandi",
-                state="Andhra Pradesh",
-                unit="₹ / Quintal",
-                modal_price=5800.0,
-                min_price=4500.0,
-                max_price=6400.0,
-                price_trend="UP",
-                price_change_24h_pct=5.2,
-                last_updated="Today, 07:45 AM"
-            ),
-            MarketItem(
-                commodity="Paddy (Basmati 1121)",
-                category="Grains",
-                mandi_name="Karnal Grain Market",
-                state="Punjab / Haryana",
-                unit="₹ / Quintal",
-                modal_price=4350.0,
-                min_price=3900.0,
-                max_price=4600.0,
-                price_trend="UP",
-                price_change_24h_pct=2.1,
-                last_updated="Today, 10:00 AM"
-            ),
-            MarketItem(
-                commodity="Wheat (Sharbati Gold)",
-                category="Grains",
-                mandi_name="Sehore APMC",
-                state="Madhya Pradesh",
-                unit="₹ / Quintal",
-                modal_price=2850.0,
-                min_price=2600.0,
-                max_price=3100.0,
-                price_trend="UP",
-                price_change_24h_pct=1.8,
-                last_updated="Today, 09:30 AM"
             ),
             MarketItem(
                 commodity="Maize / Corn (Yellow Feed)",
@@ -315,6 +263,73 @@ class MarketService:
                 last_updated="Today, 08:50 AM"
             ),
             MarketItem(
+                commodity="Red Gram (Toor / Arhar)",
+                category="Pulses",
+                mandi_name="Kalaburagi (Gulbarga) APMC",
+                state="Karnataka",
+                unit="₹ / Quintal",
+                modal_price=10400.0,
+                min_price=9500.0,
+                max_price=11200.0,
+                price_trend="DOWN",
+                price_change_24h_pct=-2.1,
+                last_updated="Today, 09:40 AM"
+            ),
+            MarketItem(
+                commodity="Sunflower (Hybrid Seed)",
+                category="Cash Crops",
+                mandi_name="Dharwad / Haveri APMC",
+                state="Karnataka",
+                unit="₹ / Quintal",
+                modal_price=6400.0,
+                min_price=5900.0,
+                max_price=6900.0,
+                price_trend="UP",
+                price_change_24h_pct=3.2,
+                last_updated="Today, 09:20 AM"
+            ),
+            MarketItem(
+                commodity="Ragi / Finger Millet",
+                category="Grains",
+                mandi_name="Tumakuru / Kolar Mandi",
+                state="Karnataka",
+                unit="₹ / Quintal",
+                modal_price=3850.0,
+                min_price=3600.0,
+                max_price=4100.0,
+                price_trend="STABLE",
+                price_change_24h_pct=0.5,
+                last_updated="Today, 09:10 AM"
+            ),
+            MarketItem(
+                commodity="Groundnut (Bold)",
+                category="Cash Crops",
+                mandi_name="Chitradurga APMC",
+                state="Karnataka",
+                unit="₹ / Quintal",
+                modal_price=6200.0,
+                min_price=5700.0,
+                max_price=6600.0,
+                price_trend="UP",
+                price_change_24h_pct=2.8,
+                last_updated="Today, 08:40 AM"
+            ),
+
+            # ================= MAHARASHTRA MANDIS =================
+            MarketItem(
+                commodity="Onion (Nashik Red)",
+                category="Vegetables",
+                mandi_name="Lasalgaon APMC",
+                state="Maharashtra",
+                unit="₹ / Quintal",
+                modal_price=2450.0,
+                min_price=1800.0,
+                max_price=2750.0,
+                price_trend="DOWN",
+                price_change_24h_pct=-3.8,
+                last_updated="Today, 09:15 AM"
+            ),
+            MarketItem(
                 commodity="Black Gram (Urad Dal)",
                 category="Pulses",
                 mandi_name="Latur Mandi",
@@ -328,18 +343,221 @@ class MarketService:
                 last_updated="Today, 09:10 AM"
             ),
             MarketItem(
-                commodity="Red Gram (Toor / Arhar)",
-                category="Pulses",
-                mandi_name="Kalaburagi (Gulbarga) APMC",
-                state="Karnataka",
+                commodity="Grape (Thompson Seedless)",
+                category="Cash Crops",
+                mandi_name="Sangli APMC",
+                state="Maharashtra",
+                unit="₹ / Kg",
+                modal_price=85.0,
+                min_price=70.0,
+                max_price=100.0,
+                price_trend="UP",
+                price_change_24h_pct=4.5,
+                last_updated="Today, 08:00 AM"
+            ),
+            MarketItem(
+                commodity="Soybean (Yellow)",
+                category="Cash Crops",
+                mandi_name="Akola / Amravati APMC",
+                state="Maharashtra",
                 unit="₹ / Quintal",
-                modal_price=10400.0,
-                min_price=9500.0,
-                max_price=11200.0,
+                modal_price=4850.0,
+                min_price=4500.0,
+                max_price=5100.0,
+                price_trend="UP",
+                price_change_24h_pct=1.9,
+                last_updated="Today, 09:30 AM"
+            ),
+            MarketItem(
+                commodity="Pomegranate (Bhagwa)",
+                category="Cash Crops",
+                mandi_name="Solapur / Nashik APMC",
+                state="Maharashtra",
+                unit="₹ / Kg",
+                modal_price=120.0,
+                min_price=95.0,
+                max_price=140.0,
+                price_trend="UP",
+                price_change_24h_pct=5.1,
+                last_updated="Today, 10:00 AM"
+            ),
+
+            # ================= ANDHRA PRADESH / TELANGANA MANDIS =================
+            MarketItem(
+                commodity="Green Chilli (G4 Teja)",
+                category="Vegetables",
+                mandi_name="Guntur Mandi",
+                state="Andhra Pradesh",
+                unit="₹ / Quintal",
+                modal_price=5800.0,
+                min_price=4500.0,
+                max_price=6400.0,
+                price_trend="UP",
+                price_change_24h_pct=5.2,
+                last_updated="Today, 07:45 AM"
+            ),
+            MarketItem(
+                commodity="Cotton (Bunny BT Hybrid)",
+                category="Cash Crops",
+                mandi_name="Kurnool / Nandyal APMC",
+                state="Andhra Pradesh",
+                unit="₹ / Quintal",
+                modal_price=7400.0,
+                min_price=6900.0,
+                max_price=7800.0,
+                price_trend="STABLE",
+                price_change_24h_pct=0.8,
+                last_updated="Today, 09:00 AM"
+            ),
+            MarketItem(
+                commodity="Banana (Robusta / Cavendish)",
+                category="Cash Crops",
+                mandi_name="Krishna / Eluru APMC",
+                state="Andhra Pradesh",
+                unit="₹ / Dozen",
+                modal_price=48.0,
+                min_price=38.0,
+                max_price=58.0,
+                price_trend="UP",
+                price_change_24h_pct=6.0,
+                last_updated="Today, 08:30 AM"
+            ),
+            MarketItem(
+                commodity="Red Chilli (Dry)",
+                category="Spices",
+                mandi_name="Warangal / Khammam Mandi",
+                state="Telangana",
+                unit="₹ / Quintal",
+                modal_price=16200.0,
+                min_price=14500.0,
+                max_price=17500.0,
+                price_trend="UP",
+                price_change_24h_pct=3.4,
+                last_updated="Today, 10:15 AM"
+            ),
+
+            # ================= PUNJAB / HARYANA MANDIS =================
+            MarketItem(
+                commodity="Paddy (Basmati 1121)",
+                category="Grains",
+                mandi_name="Karnal Grain Market",
+                state="Punjab / Haryana",
+                unit="₹ / Quintal",
+                modal_price=4350.0,
+                min_price=3900.0,
+                max_price=4600.0,
+                price_trend="UP",
+                price_change_24h_pct=2.1,
+                last_updated="Today, 10:00 AM"
+            ),
+            MarketItem(
+                commodity="Wheat (Sharbati / PBW-343)",
+                category="Grains",
+                mandi_name="Ludhiana Grain Market",
+                state="Punjab / Haryana",
+                unit="₹ / Quintal",
+                modal_price=2950.0,
+                min_price=2700.0,
+                max_price=3150.0,
+                price_trend="STABLE",
+                price_change_24h_pct=0.6,
+                last_updated="Today, 09:45 AM"
+            ),
+            MarketItem(
+                commodity="Potato (Jyoti / Kufri)",
+                category="Vegetables",
+                mandi_name="Amritsar / Jalandhar APMC",
+                state="Punjab / Haryana",
+                unit="₹ / 50kg Bag",
+                modal_price=950.0,
+                min_price=800.0,
+                max_price=1100.0,
                 price_trend="DOWN",
-                price_change_24h_pct=-2.1,
-                last_updated="Today, 09:40 AM"
-            )
+                price_change_24h_pct=-2.5,
+                last_updated="Today, 09:00 AM"
+            ),
+
+            # ================= MADHYA PRADESH MANDIS =================
+            MarketItem(
+                commodity="Wheat (Sharbati Gold)",
+                category="Grains",
+                mandi_name="Sehore APMC",
+                state="Madhya Pradesh",
+                unit="₹ / Quintal",
+                modal_price=2850.0,
+                min_price=2600.0,
+                max_price=3100.0,
+                price_trend="UP",
+                price_change_24h_pct=1.8,
+                last_updated="Today, 09:30 AM"
+            ),
+            MarketItem(
+                commodity="Garlic (Desi White)",
+                category="Vegetables",
+                mandi_name="Ratlam / Mandsaur Mandi",
+                state="Madhya Pradesh",
+                unit="₹ / Quintal",
+                modal_price=4800.0,
+                min_price=4200.0,
+                max_price=5400.0,
+                price_trend="UP",
+                price_change_24h_pct=7.2,
+                last_updated="Today, 08:30 AM"
+            ),
+            MarketItem(
+                commodity="Opium Poppy / Dhaniya (Coriander Seed)",
+                category="Spices",
+                mandi_name="Kota / Ramganjmandi APMC",
+                state="Madhya Pradesh",
+                unit="₹ / Quintal",
+                modal_price=7200.0,
+                min_price=6500.0,
+                max_price=7800.0,
+                price_trend="DOWN",
+                price_change_24h_pct=-1.3,
+                last_updated="Today, 10:30 AM"
+            ),
+
+            # ================= KERALA MANDIS =================
+            MarketItem(
+                commodity="Cardamom (Small Green 8mm)",
+                category="Spices",
+                mandi_name="Bodinaickanur / Idukki Spices Auction",
+                state="Kerala",
+                unit="₹ / Kg",
+                modal_price=2450.0,
+                min_price=2100.0,
+                max_price=2700.0,
+                price_trend="UP",
+                price_change_24h_pct=3.8,
+                last_updated="Today, 11:00 AM"
+            ),
+            MarketItem(
+                commodity="Rubber (RSS-4 Grade)",
+                category="Cash Crops",
+                mandi_name="Kottayam / Ernakulam Market",
+                state="Kerala",
+                unit="₹ / Kg",
+                modal_price=168.0,
+                min_price=155.0,
+                max_price=178.0,
+                price_trend="UP",
+                price_change_24h_pct=2.3,
+                last_updated="Today, 09:30 AM"
+            ),
+            MarketItem(
+                commodity="Pepper (Black Malabar Garbled)",
+                category="Spices",
+                mandi_name="Thrissur / Kozhikode Market",
+                state="Kerala",
+                unit="₹ / Kg",
+                modal_price=620.0,
+                min_price=580.0,
+                max_price=660.0,
+                price_trend="STABLE",
+                price_change_24h_pct=0.2,
+                last_updated="Today, 10:00 AM"
+            ),
         ]
 
         # Filter by Category

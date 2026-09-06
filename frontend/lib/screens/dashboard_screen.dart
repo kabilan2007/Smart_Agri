@@ -565,20 +565,25 @@ class _DashboardScreenState extends State<DashboardScreen>
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            width: 72,
-                            height: 72,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.15),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Text(
-                                _weatherEmoji(w.condition),
-                                style: const TextStyle(fontSize: 36),
+                          Builder(builder: (context) {
+                            // Show night icon when device clock is between 6 PM and 6 AM
+                            final hour = DateTime.now().hour;
+                            final bool isNight = hour >= 18 || hour < 6;
+                            return Container(
+                              width: 72,
+                              height: 72,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.15),
+                                shape: BoxShape.circle,
                               ),
-                            ),
-                          ),
+                              child: Center(
+                                child: Text(
+                                  _weatherEmoji(w.condition, isNight: isNight),
+                                  style: const TextStyle(fontSize: 36),
+                                ),
+                              ),
+                            );
+                          }),
                           const SizedBox(height: 6),
                           if (w.totalRainForecast3daysMm > 0)
                             Container(
@@ -1675,16 +1680,21 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  String _weatherEmoji(String condition) {
+  /// Returns a weather emoji for the given condition string.
+  /// Pass [isNight]=true to get moon/night icons for clear or partly-cloudy skies.
+  String _weatherEmoji(String condition, {bool isNight = false}) {
     final c = condition.toLowerCase();
     if (c.contains('thunder') || c.contains('storm')) return '⛈️';
     if (c.contains('heavy rain') || c.contains('moderate rain')) return '🌧️';
-    if (c.contains('rain') || c.contains('shower') || c.contains('drizzle')) return '🌦️';
-    if (c.contains('cloud')) return '☁️';
+    if (c.contains('rain') || c.contains('shower') || c.contains('drizzle')) return isNight ? '🌧️' : '🌦️';
     if (c.contains('fog') || c.contains('mist')) return '🌫️';
     if (c.contains('snow')) return '❄️';
-    if (c.contains('wind')) return '💨';
-    return '☀️';
+    if (c.contains('wind') && !c.contains('cloud')) return '💨';
+    if (c.contains('cloud') || c.contains('overcast')) {
+      return isNight ? '☁️' : '⛅';
+    }
+    // Clear / sunny — switch to moon at night
+    return isNight ? '🌙' : '☀️';
   }
 }
 

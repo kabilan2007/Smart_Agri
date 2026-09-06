@@ -47,16 +47,39 @@ class _MarketRatesScreenState extends State<MarketRatesScreen>
     'Cash Crops',
   ];
 
-  final List<String> _districts = [
-    'All Nearby',
-    'Coimbatore',
-    'Tiruppur',
-    'Oddanchatram / Dindigul',
-    'Mettupalayam / Nilgiris',
-    'Erode',
-    'Salem',
-    'Thanjavur',
-  ];
+  // Dynamically populated based on detected state — not hardcoded Tamil Nadu only
+  List<String> _districts = ['All Nearby'];
+
+  /// Returns state-appropriate district chips for the mandi filter bar.
+  static List<String> _buildDistrictsForState(String? state, String? detectedDistrict) {
+    final s = (state ?? '').toLowerCase();
+    List<String> districts;
+    if (s.contains('karnataka')) {
+      districts = ['Kolar', 'Davanagere', 'Kalaburagi / Gulbarga', 'Mysuru', 'Hubballi', 'Belagavi'];
+    } else if (s.contains('maharashtra')) {
+      districts = ['Lasalgaon / Nashik', 'Latur', 'Pune', 'Nagpur', 'Sangli', 'Solapur'];
+    } else if (s.contains('andhra')) {
+      districts = ['Guntur', 'Kurnool', 'Krishna', 'Visakhapatnam', 'Nellore', 'Kadapa'];
+    } else if (s.contains('telangana')) {
+      districts = ['Warangal', 'Khammam', 'Nalgonda', 'Nizamabad', 'Karimnagar', 'Medak'];
+    } else if (s.contains('punjab') || s.contains('haryana')) {
+      districts = ['Karnal', 'Kurukshetra', 'Ambala', 'Ludhiana', 'Amritsar', 'Patiala'];
+    } else if (s.contains('madhya pradesh')) {
+      districts = ['Sehore', 'Indore', 'Bhopal', 'Ujjain', 'Ratlam', 'Khargone'];
+    } else if (s.contains('kerala')) {
+      districts = ['Idukki / Bodinaickanur', 'Thrissur', 'Palakkad', 'Alappuzha', 'Kochi', 'Kozhikode'];
+    } else {
+      // Default: Tamil Nadu
+      districts = ['Coimbatore', 'Tiruppur', 'Oddanchatram / Dindigul', 'Mettupalayam / Nilgiris', 'Erode', 'Salem', 'Thanjavur'];
+    }
+    // Prepend GPS-detected district at index 1 if not already in list
+    final result = ['All Nearby', ...districts];
+    if (detectedDistrict != null && detectedDistrict.isNotEmpty &&
+        !result.any((d) => d.toLowerCase().contains(detectedDistrict.toLowerCase()))) {
+      result.insert(1, detectedDistrict);
+    }
+    return result;
+  }
 
   @override
   void initState() {
@@ -116,9 +139,14 @@ class _MarketRatesScreenState extends State<MarketRatesScreen>
       } catch (_) {}
     }
 
-    if (_detectedDistrict != null && !_districts.contains(_detectedDistrict)) {
+    // Rebuild district chips based on resolved state
+    if (mounted) {
       setState(() {
-        _districts.insert(1, _detectedDistrict!);
+        _districts = _buildDistrictsForState(_state, _detectedDistrict);
+        // Auto-select GPS district chip
+        if (_detectedDistrict != null) {
+          _selectedDistrict = _districts.first; // 'All Nearby' shows local mandis by GPS
+        }
       });
     }
 
