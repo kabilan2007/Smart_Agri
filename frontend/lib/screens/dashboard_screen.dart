@@ -30,6 +30,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   LocationResult? _locationResult;
   double? _lat;
   double? _lon;
+  String? _state;
+  String? _district;
   String? _placeName;
   late AnimationController _pulseController;
 
@@ -56,29 +58,27 @@ class _DashboardScreenState extends State<DashboardScreen>
       _cropsLoading = true;
     });
 
-    final locResult = await LocationService.getLivePosition();
+    final locProvider = Provider.of<LocationProvider>(context, listen: false);
+    final locResult = await locProvider.fetchLiveLocation(force: true);
     if (!mounted) return;
 
     setState(() {
       _locationResult = locResult;
       _isLocating = false;
+      _lat = locProvider.currentLatitude;
+      _lon = locProvider.currentLongitude;
+      _state = locProvider.currentState;
+      _district = locProvider.currentDistrict;
+      _placeName = locProvider.placeName;
     });
 
-    if (locResult.isSuccess && locResult.position != null) {
-      final pos = locResult.position!;
-      setState(() {
-        _lat = pos.latitude;
-        _lon = pos.longitude;
-      });
-
-      // Fetch dynamic device reverse-geocoded place name
-      LocationService.getPlaceName(pos.latitude, pos.longitude).then((name) {
-        if (mounted && name != null && name.isNotEmpty) {
-          setState(() => _placeName = name);
-        }
-      });
-
-      await _fetchWeatherAndCrops(pos.latitude, pos.longitude);
+    if (locProvider.hasLocation) {
+      await _fetchWeatherAndCrops(
+        locProvider.currentLatitude!,
+        locProvider.currentLongitude!,
+        state: locProvider.currentState,
+        district: locProvider.currentDistrict,
+      );
     } else {
       setState(() {
         _weatherLoading = false;
@@ -102,19 +102,31 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  Future<void> _fetchWeatherAndCrops(double lat, double lon) async {
+  Future<void> _fetchWeatherAndCrops(
+    double lat,
+    double lon, {
+    String? state,
+    String? district,
+  }) async {
     setState(() {
       _weatherLoading = true;
       _cropsLoading = true;
     });
-    final weather = await ApiService.getWeatherAlerts(lat: lat, lon: lon);
+    final weather = await ApiService.getWeatherAlerts(
+      lat: lat,
+      lon: lon,
+      state: state,
+      district: district,
+    );
     if (!mounted) return;
     final loc = Provider.of<LocalizationService>(context, listen: false);
     final crops = await ApiService.getCropRecommendation(
       lat: lat,
       lon: lon,
       soilType: 'Red',
-      locationName: weather?.city,
+      locationName: weather?.city ?? district,
+      state: state,
+      district: district,
       language: loc.currentLocale,
     );
     if (!mounted) return;
@@ -916,7 +928,12 @@ class _DashboardScreenState extends State<DashboardScreen>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        'route': () => MarketRatesScreen(lat: _lat, lon: _lon),
+        'route': () => MarketRatesScreen(
+          lat: _lat,
+          lon: _lon,
+          state: _state,
+          district: _district,
+        ),
       },
     ];
 
@@ -1248,8 +1265,17 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
       child: GestureDetector(
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => MarketRatesScreen(lat: _lat, lon: _lon))),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => MarketRatesScreen(
+              lat: _lat,
+              lon: _lon,
+              state: _state,
+              district: _district,
+            ),
+          ),
+        ),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -1362,8 +1388,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                   builder: (_) => const DiseaseDetectionScreen()));
             }),
             _navItem(Icons.bar_chart_rounded, 'Market', false, onTap: () {
-              Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => MarketRatesScreen(lat: _lat, lon: _lon)));
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => MarketRatesScreen(
+                    lat: _lat,
+                    lon: _lon,
+                    state: _state,
+                    district: _district,
+                  ),
+                ),
+              );
             }),
           ],
         ),

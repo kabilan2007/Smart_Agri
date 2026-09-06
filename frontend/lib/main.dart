@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'constants/theme.dart';
 import 'constants/colors.dart';
 import 'services/localization_service.dart';
+import 'services/location_service.dart';
 import 'screens/dashboard_screen.dart';
 
 void main() {
@@ -30,6 +31,8 @@ void main() {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider<LocationProvider>(
+            create: (_) => LocationProvider()),
         ChangeNotifierProvider<LocalizationService>(
             create: (_) => LocalizationService()),
         ChangeNotifierProvider<ThemeNotifier>(

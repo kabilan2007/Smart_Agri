@@ -86,6 +86,7 @@ class _AiChatScreenState extends State<AiChatScreen>
     _inputController.clear();
 
     final loc = Provider.of<LocalizationService>(context, listen: false);
+    final locProvider = Provider.of<LocationProvider>(context, listen: false);
 
     setState(() {
       _messages.add(ChatMessageModel(
@@ -104,6 +105,14 @@ class _AiChatScreenState extends State<AiChatScreen>
           .where((m) => m.role != 'assistant' || _messages.last == m)
           .take(10)
           .toList(),
+      farmerContext: {
+        'latitude': locProvider.currentLatitude ?? ApiService.currentLatitude,
+        'longitude': locProvider.currentLongitude ?? ApiService.currentLongitude,
+        'state': locProvider.currentState ?? ApiService.currentState,
+        'district': locProvider.currentDistrict ?? ApiService.currentDistrict,
+        'city': locProvider.currentCity ?? ApiService.currentCity,
+        'place_name': locProvider.placeName ?? ApiService.currentPlaceName,
+      },
     );
 
     setState(() {

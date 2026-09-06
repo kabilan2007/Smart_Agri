@@ -57,13 +57,24 @@ class _CropRecommendationScreenState extends State<CropRecommendationScreen> {
 
   Future<void> _initAndFetch() async {
     if (_liveLat == null || _liveLon == null || (_liveLat == 0.0 && _liveLon == 0.0)) {
-      final pos = await LocationService.getCurrentPosition();
-      if (pos != null && mounted) {
-        setState(() {
-          _liveLat = pos.latitude;
-          _liveLon = pos.longitude;
-        });
-      }
+      try {
+        final locProvider =
+            Provider.of<LocationProvider>(context, listen: false);
+        if (locProvider.hasLocation) {
+          setState(() {
+            _liveLat = locProvider.currentLatitude;
+            _liveLon = locProvider.currentLongitude;
+          });
+        } else {
+          final pos = await LocationService.getCurrentPosition();
+          if (pos != null && mounted) {
+            setState(() {
+              _liveLat = pos.latitude;
+              _liveLon = pos.longitude;
+            });
+          }
+        }
+      } catch (_) {}
     }
     _fetchRecommendations();
   }
@@ -75,11 +86,23 @@ class _CropRecommendationScreenState extends State<CropRecommendationScreen> {
       _expandedCrop = null;
     });
     final loc = Provider.of<LocalizationService>(context, listen: false);
-    final latToUse = _liveLat ?? 11.6643;
-    final lonToUse = _liveLon ?? 78.1460;
+    final locProvider = Provider.of<LocationProvider>(context, listen: false);
+
+    final latToUse = _liveLat ??
+        locProvider.currentLatitude ??
+        ApiService.currentLatitude ??
+        11.0168;
+    final lonToUse = _liveLon ??
+        locProvider.currentLongitude ??
+        ApiService.currentLongitude ??
+        76.9558;
+
     final res = await ApiService.getCropRecommendation(
       lat: latToUse,
       lon: lonToUse,
+      state: locProvider.currentState ?? ApiService.currentState,
+      district: locProvider.currentDistrict ?? ApiService.currentDistrict,
+      locationName: locProvider.placeName ?? ApiService.currentPlaceName,
       soilType: _selectedSoil,
       waterSource: _selectedWater,
       language: loc.currentLocale,

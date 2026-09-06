@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import 'package:provider/provider.dart';
 import '../constants/colors.dart';
 import '../models/market_rate_model.dart';
 import '../services/api_service.dart';
@@ -9,8 +10,16 @@ import '../services/location_service.dart';
 class MarketRatesScreen extends StatefulWidget {
   final double? lat;
   final double? lon;
+  final String? state;
+  final String? district;
 
-  const MarketRatesScreen({super.key, this.lat, this.lon});
+  const MarketRatesScreen({
+    super.key,
+    this.lat,
+    this.lon,
+    this.state,
+    this.district,
+  });
 
   @override
   State<MarketRatesScreen> createState() => _MarketRatesScreenState();
@@ -23,6 +32,7 @@ class _MarketRatesScreenState extends State<MarketRatesScreen>
   String _selectedCategory = 'All';
   String _selectedDistrict = 'All Nearby';
   String? _detectedDistrict;
+  String? _state;
   final TextEditingController _searchController = TextEditingController();
   late TabController _tabController;
   double? _lat;
@@ -53,6 +63,8 @@ class _MarketRatesScreenState extends State<MarketRatesScreen>
     super.initState();
     _lat = widget.lat;
     _lon = widget.lon;
+    _state = widget.state;
+    _detectedDistrict = widget.district;
 
     _tabController =
         TabController(length: _categories.length, vsync: this);
@@ -72,24 +84,42 @@ class _MarketRatesScreenState extends State<MarketRatesScreen>
   Future<void> _initLocationAndFetch() async {
     if (_lat == null || _lon == null) {
       try {
-        final pos = await LocationService.getCurrentPosition();
-        if (pos != null && mounted) {
-          _lat = pos.latitude;
-          _lon = pos.longitude;
+        final locProvider = Provider.of<LocationProvider>(context, listen: false);
+        if (locProvider.hasLocation) {
+          _lat = locProvider.currentLatitude;
+          _lon = locProvider.currentLongitude;
+          _state = locProvider.currentState;
+          _detectedDistrict = locProvider.currentDistrict;
+        } else {
+          final locRes = await LocationService.getLivePosition();
+          if (locRes.isSuccess && locRes.position != null && mounted) {
+            _lat = locRes.position!.latitude;
+            _lon = locRes.position!.longitude;
+            if (locRes.details != null) {
+              _detectedDistrict = locRes.details!.district;
+              _state = locRes.details!.state;
+            }
+          }
         }
       } catch (_) {}
     }
 
-    if (_lat != null && _lon != null) {
+    if (_lat != null && _lon != null && (_detectedDistrict == null || _state == null)) {
       try {
-        final place = await LocationService.getPlaceName(_lat!, _lon!);
-        if (place != null && mounted) {
-          final districtName = place.split(',').first.trim();
+        final details = await LocationService.getDetailedLocation(_lat!, _lon!);
+        if (details != null && mounted) {
           setState(() {
-            _detectedDistrict = districtName;
+            _detectedDistrict = details.district ?? details.city;
+            _state = details.state;
           });
         }
       } catch (_) {}
+    }
+
+    if (_detectedDistrict != null && !_districts.contains(_detectedDistrict)) {
+      setState(() {
+        _districts.insert(1, _detectedDistrict!);
+      });
     }
 
     _fetchMarketData();
@@ -114,6 +144,7 @@ class _MarketRatesScreenState extends State<MarketRatesScreen>
       query: query,
       lat: _lat,
       lon: _lon,
+      state: _state,
       district: districtParam,
     );
     if (!mounted) return;

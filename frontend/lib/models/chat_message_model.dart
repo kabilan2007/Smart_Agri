@@ -57,9 +57,14 @@ class AgriChatResponseModel {
   });
 
   factory AgriChatResponseModel.fromJson(Map<String, dynamic> json) {
+    final rawReply = json['response'] ??
+        json['reply'] ??
+        json['message'] ??
+        json['text'] ??
+        '';
     return AgriChatResponseModel(
-      reply: json['reply'] ?? '',
-      language: json['language'] ?? 'en',
+      reply: rawReply.toString(),
+      language: json['language']?.toString() ?? 'en',
       suggestedFollowups: (json['suggested_followups'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??

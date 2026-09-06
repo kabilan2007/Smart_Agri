@@ -77,17 +77,34 @@ class ChatMessage(BaseModel):
     content: str
 
 class AgriChatRequest(BaseModel):
-    message: str
+    message: Optional[str] = None
+    user_query: Optional[str] = None
+    prompt: Optional[str] = None
+    query: Optional[str] = None
     language: str = "en" # en, ta, ml, te, kn, hi, zh
     history: Optional[List[ChatMessage]] = []
     farmer_context: Optional[Dict[str, Any]] = None # {"location": "Erode", "crop": "Turmeric", "soil": "Red"}
 
+    def get_query(self) -> str:
+        for q in [self.user_query, self.prompt, self.query, self.message]:
+            if q and str(q).strip():
+                return str(q).strip()
+        return "Hello"
+
 class AgriChatResponse(BaseModel):
     reply: str
-    language: str
-    suggested_followups: List[str]
+    response: Optional[str] = None
+    language: str = "en"
+    suggested_followups: Optional[List[str]] = []
     key_takeaways: Optional[List[str]] = []
     related_govt_schemes: Optional[List[str]] = []
+
+    def __init__(self, **data):
+        if "response" not in data and "reply" in data:
+            data["response"] = data["reply"]
+        elif "reply" not in data and "response" in data:
+            data["reply"] = data["response"]
+        super().__init__(**data)
 
 # ----------------- Plant Disease Detection Schemas -----------------
 class DiseaseDetectionResponse(BaseModel):
