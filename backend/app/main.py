@@ -59,16 +59,21 @@ async def health_check():
 
 # ----------------- 1. Weather & Risk Alerts -----------------
 @app.get("/api/weather-alerts", response_model=WeatherAlertsResponse, tags=["Weather & Alerts"])
+@app.get("/api/weather", response_model=WeatherAlertsResponse, tags=["Weather & Alerts"])
 async def get_weather_alerts(
-    lat: float = Query(11.6643, description="Farmer's GPS Latitude (Default Salem/Tamil Nadu)"),
-    lon: float = Query(78.1460, description="Farmer's GPS Longitude (Default Salem/Tamil Nadu)")
+    lat: Optional[float] = Query(None, description="Farmer GPS Latitude"),
+    lon: Optional[float] = Query(None, description="Farmer GPS Longitude"),
+    latitude: Optional[float] = Query(None, description="Alias for Latitude"),
+    longitude: Optional[float] = Query(None, description="Alias for Longitude")
 ):
     """
     Fetches real-time weather analytics, reverse geocoded city/district,
     and generates automated agricultural risk alerts (Heavy rain, Fungal risk, Heatwave, Wind damage).
     """
     try:
-        response = await WeatherService.get_weather_and_alerts(lat, lon)
+        final_lat = lat if lat is not None else (latitude if latitude is not None else 11.6643)
+        final_lon = lon if lon is not None else (longitude if longitude is not None else 78.1460)
+        response = await WeatherService.get_weather_and_alerts(final_lat, final_lon)
         return response
     except Exception as e:
         raise HTTPException(
@@ -92,12 +97,13 @@ async def recommend_crops(request: CropRecommendationRequest):
             detail=f"Crop recommendation failed: {str(e)}"
         )
 
-# ----------------- 3. Universal Agri & Soil Chatbot -----------------
+# ----------------- 3. Universal Agri & Soil Chatbot (AI Doctor) -----------------
 @app.post("/api/agri-chat", response_model=AgriChatResponse, tags=["AI Chatbot"])
+@app.post("/api/ai-doctor", response_model=AgriChatResponse, tags=["AI Chatbot"])
 async def agri_chat(request: AgriChatRequest):
     """
     24/7 Soil & Agricultural AI Assistant powered by Google Gemini.
-    Provides expert advice on soil pH balancing, organic inputs (Panchagavya, Vermicompost),
+    Provides expert advice on crop diagnosis, soil pH balancing, organic inputs (Panchagavya, Vermicompost),
     pest & disease IPM, irrigation, and government subsidies.
     """
     try:
@@ -136,26 +142,33 @@ async def detect_plant_disease(
 
 # ----------------- 5. Live Market Rates (e-NAM / Agmarknet) -----------------
 @app.get("/api/market-rates", response_model=MarketRatesResponse, tags=["Market Rates"])
+@app.get("/api/mandi-rates", response_model=MarketRatesResponse, tags=["Market Rates"])
 async def get_market_rates(
     category: Optional[str] = Query(None, description="Vegetables, Grains, Cash Crops, Pulses, Spices, or All"),
     query: Optional[str] = Query(None, description="Search term for crop or mandi"),
     lat: Optional[float] = Query(None, description="Farmer GPS Latitude"),
     lon: Optional[float] = Query(None, description="Farmer GPS Longitude"),
+    latitude: Optional[float] = Query(None, description="Alias for Latitude"),
+    longitude: Optional[float] = Query(None, description="Alias for Longitude"),
     state: Optional[str] = Query(None, description="Farmer State/Region"),
-    district: Optional[str] = Query(None, description="Farmer District/City")
+    district: Optional[str] = Query(None, description="Farmer District/City"),
+    location_name: Optional[str] = Query(None, description="Farmer Location Name")
 ):
     """
     Real-time agricultural commodity prices, mandi rates, and daily price trends (UP/DOWN/STABLE).
     Prioritizes local district & state mandis based on live GPS coordinates.
     """
     try:
+        final_lat = lat if lat is not None else latitude
+        final_lon = lon if lon is not None else longitude
+        final_district = district or location_name
         response = MarketService.get_live_market_rates(
             category=category,
             query=query,
-            lat=lat,
-            lon=lon,
+            lat=final_lat,
+            lon=final_lon,
             state=state,
-            district=district
+            district=final_district
         )
         return response
     except Exception as e:

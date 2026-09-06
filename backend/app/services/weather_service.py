@@ -318,16 +318,29 @@ class WeatherService:
 
     @staticmethod
     def _generate_smart_simulated_weather(city: str, state: str, country: str, lat: float, lon: float) -> WeatherAlertsResponse:
+        import math
         today = datetime.date.today()
+        hour = datetime.datetime.now().hour
         day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        
+        # Dynamically calculate temperature & humidity based on latitude and current hour
+        lat_mod = abs(lat) % 10.0
+        hour_factor = math.sin((hour - 6) / 24 * 2 * math.pi)
+        
+        base_temp = 26.0 + (lat_mod * 0.8) + (hour_factor * 5.0)
+        temp = round(base_temp, 1)
+        feels_like = round(temp + 2.2, 1)
+        humidity = max(35, min(95, int(65 - (hour_factor * 20) + (lat_mod * 2))))
+        wind_speed = round(8.0 + (abs(lon) % 5.0) * 1.8 + (1.5 if hour > 12 else 0), 1)
+        wind_gusts = round(wind_speed * 1.35, 1)
         
         forecast_days = []
         forecast_sim = [
-            {"offset": 0, "cond": "Partly Cloudy", "t_min": 24.0, "t_max": 32.5, "pop": 20, "rain": 0.0, "icon": "02d"},
-            {"offset": 1, "cond": "Mainly Clear", "t_min": 23.5, "t_max": 33.0, "pop": 10, "rain": 0.0, "icon": "01d"},
-            {"offset": 2, "cond": "Partly Cloudy", "t_min": 23.0, "t_max": 32.0, "pop": 15, "rain": 0.0, "icon": "02d"},
-            {"offset": 3, "cond": "Sunny", "t_min": 24.0, "t_max": 33.5, "pop": 5, "rain": 0.0, "icon": "01d"},
-            {"offset": 4, "cond": "Sunny", "t_min": 25.0, "t_max": 34.0, "pop": 5, "rain": 0.0, "icon": "01d"},
+            {"offset": 0, "cond": "Mainly Clear", "t_min": round(temp - 4.5, 1), "t_max": round(temp + 3.5, 1), "pop": 15, "rain": 0.0, "icon": "01d"},
+            {"offset": 1, "cond": "Partly Cloudy", "t_min": round(temp - 5.0, 1), "t_max": round(temp + 3.0, 1), "pop": 20, "rain": 0.0, "icon": "02d"},
+            {"offset": 2, "cond": "Partly Cloudy", "t_min": round(temp - 4.0, 1), "t_max": round(temp + 2.5, 1), "pop": 25, "rain": 0.0, "icon": "02d"},
+            {"offset": 3, "cond": "Sunny", "t_min": round(temp - 4.5, 1), "t_max": round(temp + 4.0, 1), "pop": 10, "rain": 0.0, "icon": "01d"},
+            {"offset": 4, "cond": "Mainly Clear", "t_min": round(temp - 4.0, 1), "t_max": round(temp + 4.5, 1), "pop": 10, "rain": 0.0, "icon": "01d"},
         ]
 
         total_rain_3d = 0.0
@@ -346,10 +359,17 @@ class WeatherService:
                 icon=item["icon"]
             ))
 
-        temp = 29.5
-        humidity = 62
-        wind_speed = 11.0
-        is_rain_24h = False
+        alerts = WeatherService._generate_smart_agri_alerts(
+            temp=temp,
+            humidity=humidity,
+            wind_speed=wind_speed,
+            wind_gusts=wind_gusts,
+            rain_3d=0.0,
+            rain_24h_mm=0.0,
+            rain_prob_24h=15,
+            weather_code=1,
+            is_rain_24h=False
+        )
 
         return WeatherAlertsResponse(
             city=city,
@@ -357,15 +377,15 @@ class WeatherService:
             state=state,
             country=country,
             temperature=temp,
-            temp_feels_like=30.5,
+            temp_feels_like=feels_like,
             humidity=humidity,
             wind_speed_kmh=wind_speed,
-            condition="Partly Cloudy",
+            condition="Mainly Clear",
             description="Optimal farming weather for field operations",
-            icon="02d",
-            is_rain_expected_24h=is_rain_24h,
+            icon="01d",
+            is_rain_expected_24h=False,
             total_rain_forecast_3days_mm=0.0,
-            alerts=[],
+            alerts=alerts,
             forecast=forecast_days
         )
 

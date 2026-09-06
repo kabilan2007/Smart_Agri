@@ -126,13 +126,21 @@ class _AiChatScreenState extends State<AiChatScreen>
     await _voice.startListening(
       langCode: loc.currentLocale,
       onResult: (text) {
-        setState(() {
-          _inputController.text = text;
-          _isListening = false;
-        });
-        _sendMessage(text);
+        if (mounted) {
+          setState(() {
+            _inputController.text = text;
+          });
+        }
       },
-      onDone: () => setState(() => _isListening = false),
+      onDone: () {
+        if (mounted) {
+          setState(() => _isListening = false);
+          final text = _inputController.text.trim();
+          if (text.isNotEmpty) {
+            _sendMessage(text);
+          }
+        }
+      },
     );
   }
 
@@ -585,8 +593,14 @@ class _AiChatScreenState extends State<AiChatScreen>
               GestureDetector(
                 onTap: _isListening
                     ? () async {
-                        await _voice.stopListening();
-                        setState(() => _isListening = false);
+                        final text = await _voice.stopListening();
+                        if (mounted) {
+                          setState(() => _isListening = false);
+                          if (text.trim().isNotEmpty) {
+                            _inputController.text = text.trim();
+                            _sendMessage(text.trim());
+                          }
+                        }
                       }
                     : _startVoiceInput,
                 child: AnimatedContainer(

@@ -80,11 +80,14 @@ class TtsSttService {
     return _sttAvailable;
   }
 
+  String _lastRecognizedWords = '';
+
   Future<void> startListening({
     required String langCode,
     required Function(String text) onResult,
     required Function() onDone,
   }) async {
+    _lastRecognizedWords = '';
     if (!_sttAvailable) {
       _sttAvailable = await initStt();
     }
@@ -93,25 +96,28 @@ class TtsSttService {
       final locale = _sttLocaleMap[langCode] ?? 'en_US';
       _isListening = true;
       await _stt.listen(
+        localeId: locale,
         onResult: (result) {
+          _lastRecognizedWords = result.recognizedWords;
+          onResult(result.recognizedWords);
           if (result.finalResult) {
-            onResult(result.recognizedWords);
             _isListening = false;
             onDone();
           }
         },
         listenOptions: stt.SpeechListenOptions(
-          partialResults: false,
+          partialResults: true,
           cancelOnError: true,
-          listenMode: stt.ListenMode.confirmation,
+          listenMode: stt.ListenMode.dictation,
         ),
       );
     }
   }
 
-  Future<void> stopListening() async {
+  Future<String> stopListening() async {
     await _stt.stop();
     _isListening = false;
+    return _lastRecognizedWords;
   }
 
   Future<void> dispose() async {
