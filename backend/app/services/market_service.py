@@ -23,17 +23,15 @@ class MarketService:
                 address = response.json().get('address', {})
                 
                 state = address.get('state', 'Tamil Nadu')
-                # District, State District அல்லது Town/City-ஐக் கண்டறிதல்
                 district = (
                     address.get('state_district') or 
                     address.get('district') or 
                     address.get('county') or 
                     address.get('city') or 
-                    "Coimbatore"
+                    "Tamil Nadu"
                 )
                 
-                # 'District' என்ற சொல் கடைசியில் இருந்தால் நீக்குதல் (எ.கா: "Coimbatore District" -> "Coimbatore")
-                district = district.replace(" District", "").strip()
+                district = district.replace(" District", "").replace(" District", "").strip()
                 return state, district
         except Exception as e:
                 print(f"Geocoding Error: {e}")
@@ -52,7 +50,7 @@ class MarketService:
         
         today_str = datetime.date.today().strftime("%d %b %Y")
         
-        # User Parameter அனுப்பாவிட்டால் GPS Coordinates மூலம் நேரடி ஊர் பெயர் கண்டறிதல்
+        # GPS மூலம் பயனரின் சொந்த மாவட்டத்தைக் கண்டறிதல்
         if lat and lon and not (state and district):
             detected_state, detected_district = MarketService._get_location_from_coords(lat, lon)
             user_state = state or detected_state
@@ -61,8 +59,12 @@ class MarketService:
             user_state = state or "Tamil Nadu"
             user_district = district or "Coimbatore"
 
+        # மாவட்டப் பெயரின் முதல் வார்த்தை (எ.கா: "Tiruchirappalli South" -> "Tiruchirappalli")
+        clean_district = user_district.split()[0] if user_district else ""
+
         api_key = os.getenv("AGMARKNET_API_KEY", "")
-        commodities = []
+        district_commodities = []
+        state_commodities = []
 
         if api_key:
             try:
@@ -70,7 +72,7 @@ class MarketService:
                 params = {
                     "api-key": api_key,
                     "format": "json",
-                    "limit": "200",
+                    "limit": "300",
                     "filters[state]": user_state
                 }
 
@@ -82,35 +84,40 @@ class MarketService:
                     
                     for item in records:
                         rec_district = item.get("district", "")
+                        market_item = MarketItem(
+                            commodity=item.get("commodity", "Crop"),
+                            category=category or "General",
+                            mandi_name=f"{item.get('market', '')} ({rec_district})",
+                            state=item.get("state", user_state),
+                            unit="₹ / Quintal",
+                            modal_price=float(item.get("modal_price", 0)),
+                            min_price=float(item.get("min_price", 0)),
+                            max_price=float(item.get("max_price", 0)),
+                            price_trend="STABLE",
+                            price_change_24h_pct=0.0,
+                            last_updated=item.get("arrival_date", "Today")
+                        )
                         
-                        # பயனர் இருக்கும் குறிப்பிட்ட மாவட்டத்தின் தரவை மட்டும் வடிகட்டுதல்
-                        if user_district.lower() in rec_district.lower() or rec_district.lower() in user_district.lower():
-                            commodities.append(
-                                MarketItem(
-                                    commodity=item.get("commodity", "Crop"),
-                                    category=category or "General",
-                                    mandi_name=f"{item.get('market', '')} ({rec_district})",
-                                    state=item.get("state", user_state),
-                                    unit="₹ / Quintal",
-                                    modal_price=float(item.get("modal_price", 0)),
-                                    min_price=float(item.get("min_price", 0)),
-                                    max_price=float(item.get("max_price", 0)),
-                                    price_trend="STABLE",
-                                    price_change_24h_pct=0.0,
-                                    last_updated=item.get("arrival_date", "Today")
-                                )
-                            )
+                        # பயனர் இருக்கும் குறிப்பிட்ட மாவட்டத்தின் மண்டித் தரவை மட்டும் சேகரித்தல்
+                        if clean_district and (clean_district.lower() in rec_district.lower() or rec_district.lower() in clean_district.lower()):
+                            district_commodities.append(market_item)
+                        else:
+                            state_commodities.append(market_item)
             except Exception as e:
                 print(f"Error fetching Agmarknet API data: {e}")
 
-        # Category Search Filter
-        if category and category.lower() != "all" and commodities:
-            commodities = [c for c in commodities if c.category.lower() == category.lower()]
+        # 1. சொந்த மாவட்டத் தரவு இருந்தால் அதை மட்டுமே காட்டும்.
+        # 2. சொந்த மாவட்டத்தில் மண்டி இல்லையெனில்/தரவு வரவில்லை எனில் பக்கத்து/மாநிலத்தின் பிற மண்டிகளைக் காட்டும்.
+        final_commodities = district_commodities if district_commodities else state_commodities
+
+        # Category Filter
+        if category and category.lower() != "all" and final_commodities:
+            final_commodities = [c for c in final_commodities if c.category.lower() == category.lower()]
 
         # Query Search Filter
-        if query and commodities:
+        if query and final_commodities:
             q = query.lower()
-            commodities = [c for c in commodities if q in c.commodity.lower() or q in c.mandi_name.lower()]
+            final_commodities = [c for c in final_commodities if q in c.commodity.lower() or q in c.mandi_name.lower()]
 
         overview = (
             f"Live Agmarknet Mandi Index: Showing official real-time daily prices "
@@ -120,5 +127,5 @@ class MarketService:
         return MarketRatesResponse(
             market_overview=overview,
             date=today_str,
-            commodities=commodities
+            commodities=final_commodities
         )
