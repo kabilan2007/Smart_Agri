@@ -7,17 +7,12 @@ from app.models.schemas import MarketRatesResponse, MarketItem
 class MarketService:
     @staticmethod
     def _get_location_from_coords(lat: Optional[float], lon: Optional[float]):
-        """
-        GPS Coordinates வைத்து State மற்றும் District கண்டறிதல்
-        """
         if lat is None or lon is None:
             return "Tamil Nadu", "Coimbatore"
-
         try:
             geo_url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json"
             headers = {'User-Agent': 'SmartAgriAppMobile/1.0'}
-            
-            response = requests.get(geo_url, headers=headers, timeout=3)
+            response = requests.get(geo_url, headers=headers, timeout=5)
             if response.status_code == 200:
                 address = response.json().get('address', {})
                 state = address.get('state', 'Tamil Nadu')
@@ -28,11 +23,9 @@ class MarketService:
                     address.get('city') or 
                     "Coimbatore"
                 )
-                district = str(district).replace(" District", "").strip()
-                return state, district
+                return state, str(district).replace(" District", "").strip()
         except Exception as e:
             print(f"Geocoding Error: {e}")
-
         return "Tamil Nadu", "Coimbatore"
 
     @staticmethod
@@ -47,7 +40,6 @@ class MarketService:
         
         today_str = datetime.date.today().strftime("%d %b %Y")
         
-        # GPS மூலம் மாவட்டத்தை எடுத்தல்
         if lat is not None and lon is not None and not (state and district):
             detected_state, detected_district = MarketService._get_location_from_coords(lat, lon)
             user_state = state or detected_state
@@ -71,17 +63,13 @@ class MarketService:
                     "limit": "300",
                     "filters[state]": user_state
                 }
-
-                response = requests.get(url, params=params, timeout=8)
+                # மெதுவான API-க்காக Timeout 20 விநாடிகளாக உயர்த்தப்பட்டுள்ளது
+                response = requests.get(url, params=params, timeout=20)
                 
                 if response.status_code == 200:
-                    data = response.json()
-                    records = data.get("records", [])
-                    
+                    records = response.json().get("records", [])
                     for item in records:
                         rec_district = str(item.get("district", ""))
-                        
-                        # Modal Price பாதுகாப்பு
                         try:
                             m_price = float(item.get("modal_price", 0))
                             min_p = float(item.get("min_price", 0))
@@ -92,7 +80,7 @@ class MarketService:
                         market_item = MarketItem(
                             commodity=item.get("commodity", "Crop"),
                             category=category or "General",
-                            mandi_name=f"{item.get('market', '')} ({rec_district})",
+                            mandi_name=f"{item.get('market', 'Mandi')} ({rec_district or user_district})",
                             state=item.get("state", user_state),
                             unit="₹ / Quintal",
                             modal_price=m_price,
@@ -102,7 +90,8 @@ class MarketService:
                             price_change_24h_pct=0.0,
                             last_updated=item.get("arrival_date", today_str)
                         )
-                        
+
+                        # மாவட்டத் தரவு பொருந்துகிறதா என்று சரிபார்த்தல்
                         if clean_district.lower() in rec_district.lower() or rec_district.lower() in clean_district.lower():
                             district_commodities.append(market_item)
                         else:
@@ -110,7 +99,7 @@ class MarketService:
             except Exception as e:
                 print(f"Error fetching Agmarknet API data: {e}")
 
-        # சொந்த மாவட்டம் இருந்தால் அது, இல்லையெனில் தமிழ்நாட்டின் பிற மண்டிகள்
+        # மாவட்டத் தரவு இருந்தால் அது, இல்லையெனில் தமிழ்நாட்டின் பிற மாவட்டத் தரவுகள்
         final_commodities = district_commodities if district_commodities else state_commodities
 
         # Category Filter
@@ -122,10 +111,7 @@ class MarketService:
             q = query.lower()
             final_commodities = [c for c in final_commodities if q in str(c.commodity).lower() or q in str(c.mandi_name).lower()]
 
-        overview = (
-            f"Live Agmarknet Mandi Index: Showing official real-time daily prices "
-            f"for {user_district}, {user_state}."
-        )
+        overview = f"Live Agmarknet Mandi Index: Showing real-time market rates for {user_district}, {user_state}."
 
         return MarketRatesResponse(
             market_overview=overview,
