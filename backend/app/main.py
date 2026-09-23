@@ -1,4 +1,6 @@
 import os
+import threading
+import time
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,6 +38,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ----------------- Background Market Data Refresher -----------------
+# Agmarknet's live API is slow/unreliable, so we don't make farmers wait on it
+# per-request. Instead we pre-warm the cache on boot and refresh it every few
+# hours in the background; user requests then always read from cache (fast),
+# with a live retry only if the cache is completely empty.
+MARKET_REFRESH_INTERVAL_SECONDS = 3 * 60 * 60  # 3 hours
+MARKET_STATES_TO_PREFETCH = ["Tamil Nadu"]
+
+def _background_market_refresher():
+    while True:
+        for state in MARKET_STATES_TO_PREFETCH:
+            try:
+                print(f"🔄 Background refresh: fetching Agmarknet data for {state}...")
+                MarketService.get_live_market_rates(state=state, district=state)
+                print(f"✅ Background refresh: {state} cache updated.")
+            except Exception as e:
+                print(f"⚠️  Background refresh failed for {state}: {e}")
+        time.sleep(MARKET_REFRESH_INTERVAL_SECONDS)
+
+@app.on_event("startup")
+def start_background_market_refresher():
+    thread = threading.Thread(target=_background_market_refresher, daemon=True)
+    thread.start()
 
 @app.get("/", tags=["General"])
 async def root():
