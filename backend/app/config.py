@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # API Keys
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     OPENWEATHER_API_KEY: str = os.getenv("OPENWEATHER_API_KEY", "")
-    AGMARKENT_API_KEY: str = os.getenv("AGMARKENT_API_KEY", "")
+    AGMARKNET_API_KEY: str = os.getenv("AGMARKNET_API_KEY", "")
     
     # Defaults & Endpoints
     OPENWEATHER_CURRENT_URL: str = "https://api.openweathermap.org/data/2.5/weather"

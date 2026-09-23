@@ -54,9 +54,13 @@ class MarketService:
         district_commodities = []
         state_commodities = []
 
+        if not api_key:
+            print("⚠️  AGMARKNET_API_KEY not set in environment — market data will be empty. "
+                  "Get a free key at https://data.gov.in/user/register and set it in Render/.env")
+
         if api_key:
             try:
-                url = "https://api.data.gov.in/resource/9ef7421f-0528-472d-a773-a6894f58b39f"
+                url = "https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070"
                 params = {
                     "api-key": api_key,
                     "format": "json",
@@ -65,8 +69,10 @@ class MarketService:
                 }
                 # மெதுவான API-க்காக Timeout 20 விநாடிகளாக உயர்த்தப்பட்டுள்ளது
                 response = requests.get(url, params=params, timeout=20)
-                
-                if response.status_code == 200:
+
+                if response.status_code != 200:
+                    print(f"⚠️  Agmarknet API returned {response.status_code}: {response.text[:300]}")
+                else:
                     records = response.json().get("records", [])
                     for item in records:
                         rec_district = str(item.get("district", ""))
