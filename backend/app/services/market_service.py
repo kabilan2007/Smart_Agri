@@ -1,62 +1,46 @@
 import os
-import requests
+import time
 import datetime
 import threading
-import time
-from typing import Optional
+from typing import List, Optional, Dict, Any
+
+import requests
 
 from app.models.schemas import MarketRatesResponse, MarketItem
 
 
 class MarketService:
     """
-    Agmarknet market-rate service.
+    REAL Agmarknet market-price service.
 
-    Flow:
-        GPS coordinates
-            ↓
-        District / State
-            ↓
-        Cached Agmarknet records
-            ↓
-        District mandi records
-            ↓
-        Real modal/min/max prices
+    Rules:
+    1. No dummy/sample market prices.
+    2. No hardcoded Onion/Tomato/etc. prices.
+    3. Uses user's GPS -> State/District.
+    4. Fetches prices from Government of India Agmarknet API.
+    5. Never falls back to another district.
+    6. If Agmarknet has no data, commodities=[].
     """
 
-    # ---------------------------------------------------------
-    # CONFIGURATION
-    # ---------------------------------------------------------
-
+    # Government of India Agmarknet resource
     AGMARKNET_URL = (
         "https://api.data.gov.in/resource/"
         "9ef84268-d588-465a-a308-a864a43d0070"
     )
 
-    # Cache is kept for 12 hours.
-    # This prevents every mobile request from hitting Agmarknet.
-    _CACHE_MAX_AGE_HOURS = 12
+    # Cache settings
+    CACHE_MAX_AGE_SECONDS = 6 * 60 * 60
+    STALE_CACHE_MAX_AGE_SECONDS = 24 * 60 * 60
 
-    # Number of records requested from Agmarknet.
-    _API_LIMIT = 300
+    # Keep Render request short
+    API_TIMEOUT_SECONDS = 8
+    GEO_TIMEOUT_SECONDS = 4
 
-    # Agmarknet can be slow.
-    _API_TIMEOUT_SECONDS = 15
+    # data.gov.in allows pagination.
+    API_LIMIT = 100
 
-    # Nominatim reverse-geocoding timeout.
-    _GEO_TIMEOUT_SECONDS = 5
-
-    # In-memory cache:
-    # {
-    #   "Tamil Nadu": {
-    #       "records": [...],
-    #       "fetched_at": datetime
-    #   }
-    # }
-    _cache = {}
-
-    # Prevent two requests from simultaneously fetching Agmarknet.
-    _refresh_lock = threading.Lock()
+    _cache: Dict[str, Dict[str, Any]] = {}
+    _cache_lock = threading.Lock()
 
     # ---------------------------------------------------------
     # TEXT NORMALIZATION
@@ -64,14 +48,6 @@ class MarketService:
 
     @staticmethod
     def _normalize_name(value: Optional[str]) -> str:
-        """
-        Normalize district/state/market names for matching.
-
-        Example:
-            "Coimbatore District" -> "coimbatore"
-            "COIMBATORE"          -> "coimbatore"
-        """
-
         if not value:
             return ""
 
@@ -83,17 +59,22 @@ class MarketService:
             " dist",
         ]
 
-        for item in replacements:
-            if value.endswith(item):
-                value = value[: -len(item)]
+        for suffix in replacements:
+            if value.endswith(suffix):
+                value = value[: -len(suffix)].strip()
 
-        # Remove extra spaces
-        value = " ".join(value.split())
-
-        return value
+        return " ".join(value.split())
 
     # ---------------------------------------------------------
-    # LOCATION FROM GPS
+    # API KEY
+    # ---------------------------------------------------------
+
+    @staticmethod
+    def _get_api_key() -> str:
+        return os.getenv("AGMARKNET_API_KEY", "").strip()
+
+    # ---------------------------------------------------------
+    # GPS -> LOCATION
     # ---------------------------------------------------------
 
     @staticmethod
@@ -102,487 +83,506 @@ class MarketService:
         lon: Optional[float]
     ):
         """
-        Reverse geocode GPS coordinates using OpenStreetMap Nominatim.
-
-        Returns:
-            (state, district)
+        Convert farmer GPS coordinates into State + District.
         """
 
         if lat is None or lon is None:
-            return "Tamil Nadu", "Coimbatore"
+            return None, None
 
         try:
-            geo_url = "https://nominatim.openstreetmap.org/reverse"
-
-            params = {
-                "lat": lat,
-                "lon": lon,
-                "format": "json",
-                "zoom": 10,
-                "addressdetails": 1,
-            }
-
-            headers = {
-                "User-Agent": "SmartAgriAppMobile/1.0"
-            }
-
             response = requests.get(
-                geo_url,
-                params=params,
-                headers=headers,
-                timeout=MarketService._GEO_TIMEOUT_SECONDS
+                "https://nominatim.openstreetmap.org/reverse",
+                params={
+                    "lat": lat,
+                    "lon": lon,
+                    "format": "json",
+                    "zoom": 10,
+                    "addressdetails": 1,
+                },
+                headers={
+                    "User-Agent": "SmartAgriAppMobile/1.0"
+                },
+                timeout=MarketService.GEO_TIMEOUT_SECONDS,
             )
 
             if response.status_code != 200:
                 print(
-                    f"⚠️ Nominatim returned "
+                    f"⚠️ Reverse geocoding HTTP "
                     f"{response.status_code}"
                 )
-                return "Tamil Nadu", "Coimbatore"
+                return None, None
 
             data = response.json()
             address = data.get("address", {})
 
             state = (
                 address.get("state")
-                or "Tamil Nadu"
+                or address.get("state_district")
             )
 
             district = (
                 address.get("state_district")
                 or address.get("district")
                 or address.get("county")
-                or address.get("city_district")
-                or address.get("city")
-                or "Coimbatore"
             )
 
-            district = (
-                str(district)
-                .replace(" District", "")
-                .replace(" district", "")
-                .strip()
-            )
+            if not state or not district:
+                print(
+                    "⚠️ GPS location did not contain "
+                    "state/district"
+                )
+                return None, None
+
+            district = str(district)
+
+            for suffix in [
+                " District",
+                " district",
+                " Dist",
+                " dist",
+            ]:
+                if district.endswith(suffix):
+                    district = district[
+                        :-len(suffix)
+                    ].strip()
 
             print(
                 f"📍 GPS location detected: "
                 f"{district}, {state}"
             )
 
-            return str(state).strip(), district
+            return (
+                str(state).strip(),
+                district.strip()
+            )
+
+        except requests.Timeout:
+            print("⏱️ Reverse geocoding timed out")
+            return None, None
 
         except Exception as e:
-            print(f"⚠️ Geocoding error: {e}")
-
-            return "Tamil Nadu", "Coimbatore"
+            print(
+                f"❌ Reverse geocoding error: {e}"
+            )
+            return None, None
 
     # ---------------------------------------------------------
-    # CACHE HELPERS
+    # CACHE KEY
     # ---------------------------------------------------------
 
-    @staticmethod
-    def _get_cached_entry(state: str):
-        return MarketService._cache.get(state)
-
-    @staticmethod
-    def _cache_age_hours(state: str) -> Optional[float]:
-
-        entry = MarketService._get_cached_entry(state)
-
-        if not entry:
-            return None
-
-        fetched_at = entry.get("fetched_at")
-
-        if not fetched_at:
-            return None
-
-        age = datetime.datetime.now() - fetched_at
-
-        return age.total_seconds() / 3600
-
-    @staticmethod
-    def _get_cached_records(
+    @classmethod
+    def _cache_key(
+        cls,
         state: str,
+        district: str
+    ) -> str:
+        return (
+            f"{cls._normalize_name(state)}:"
+            f"{cls._normalize_name(district)}"
+        )
+
+    # ---------------------------------------------------------
+    # READ CACHE
+    # ---------------------------------------------------------
+
+    @classmethod
+    def _get_cached_records(
+        cls,
+        state: str,
+        district: str,
         allow_stale: bool = False
-    ):
-        """
-        Return cached records.
+    ) -> Optional[List[dict]]:
 
-        Normal requests use only cache newer than 12 hours.
+        key = cls._cache_key(
+            state,
+            district
+        )
 
-        If allow_stale=True, stale cache is returned as a
-        fallback when Agmarknet is temporarily unavailable.
-        """
+        with cls._cache_lock:
+            cached = cls._cache.get(key)
 
-        entry = MarketService._get_cached_entry(state)
+        if not cached:
+            return None
 
-        if not entry:
-            return []
+        age = time.time() - cached["timestamp"]
 
-        records = entry.get("records", [])
-        fetched_at = entry.get("fetched_at")
-
-        if not fetched_at:
-            return []
-
-        age = datetime.datetime.now() - fetched_at
-        age_hours = age.total_seconds() / 3600
-
-        if age_hours <= MarketService._CACHE_MAX_AGE_HOURS:
+        if age <= cls.CACHE_MAX_AGE_SECONDS:
             print(
-                f"ℹ️ Using cached Agmarknet data for "
-                f"{state} "
-                f"({int(age.total_seconds() // 60)} min old)"
+                f"✅ Fresh cache used: "
+                f"{district}, {state}"
             )
+            return cached["records"]
 
-            return records
-
-        if allow_stale:
+        if (
+            allow_stale
+            and age <= cls.STALE_CACHE_MAX_AGE_SECONDS
+        ):
             print(
-                f"⚠️ Using stale Agmarknet cache for "
-                f"{state} "
-                f"({int(age_hours)} hours old)"
+                f"⚠️ Stale cache used: "
+                f"{district}, {state}"
             )
+            return cached["records"]
 
-            return records
-
-        return []
+        return None
 
     # ---------------------------------------------------------
     # SAVE CACHE
     # ---------------------------------------------------------
 
-    @staticmethod
+    @classmethod
     def _save_cache(
+        cls,
         state: str,
-        records: list
+        district: str,
+        records: List[dict]
     ):
-        MarketService._cache[state] = {
-            "records": records,
-            "fetched_at": datetime.datetime.now()
-        }
+
+        key = cls._cache_key(
+            state,
+            district
+        )
+
+        with cls._cache_lock:
+            cls._cache[key] = {
+                "timestamp": time.time(),
+                "records": records,
+            }
 
         print(
-            f"💾 Agmarknet cache updated: "
-            f"{state} - {len(records)} records"
+            f"💾 Cache saved: "
+            f"{district}, {state} "
+            f"({len(records)} records)"
         )
 
     # ---------------------------------------------------------
-    # FETCH AGMARKNET
+    # FETCH REAL AGMARKNET DATA
     # ---------------------------------------------------------
 
-    @staticmethod
+    @classmethod
     def _fetch_agmarknet_data(
-        state: str
-    ):
-        """
-        Fetch market records from data.gov.in / Agmarknet.
+        cls,
+        state: str,
+        district: str
+    ) -> Optional[List[dict]]:
 
-        This function is called only when cache needs refreshing.
-        """
-
-        api_key = os.getenv(
-            "AGMARKNET_API_KEY",
-            ""
-        ).strip()
+        api_key = cls._get_api_key()
 
         if not api_key:
             print(
-                "❌ AGMARKNET_API_KEY is missing."
+                "❌ AGMARKNET_API_KEY is missing"
             )
+            return None
 
-            return []
-
-        params = {
-            "api-key": api_key,
-            "format": "json",
-            "limit": str(
-                MarketService._API_LIMIT
-            ),
-            "filters[state]": state,
-        }
+        print(
+            f"🌐 Agmarknet request: "
+            f"{district}, {state}"
+        )
 
         try:
 
-            print(
-                f"🌐 Fetching Agmarknet data "
-                f"for {state}..."
-            )
+            params = {
+                "api-key": api_key,
+                "format": "json",
+                "limit": str(cls.API_LIMIT),
+
+                # Official Agmarknet filters
+                "filters[state.keyword]": state,
+                "filters[district]": district,
+
+                # Only actual source fields
+                "fields": (
+                    "state,"
+                    "district,"
+                    "market,"
+                    "commodity,"
+                    "variety,"
+                    "grade,"
+                    "arrival_date,"
+                    "min_price,"
+                    "max_price,"
+                    "modal_price"
+                ),
+            }
+
+            started = time.time()
 
             response = requests.get(
-                MarketService.AGMARKNET_URL,
+                cls.AGMARKNET_URL,
                 params=params,
-                timeout=MarketService._API_TIMEOUT_SECONDS
+                timeout=cls.API_TIMEOUT_SECONDS,
             )
 
+            elapsed = time.time() - started
+
             print(
-                f"📡 Agmarknet HTTP status: "
-                f"{response.status_code}"
+                f"📡 Agmarknet HTTP "
+                f"{response.status_code} "
+                f"in {elapsed:.2f}s"
             )
 
             if response.status_code != 200:
-
                 print(
-                    "⚠️ Agmarknet API error: "
-                    f"{response.text[:500]}"
+                    f"❌ Agmarknet HTTP error: "
+                    f"{response.status_code}"
                 )
-
-                return []
+                return None
 
             data = response.json()
 
-            records = data.get(
-                "records",
-                []
-            )
+            records = data.get("records", [])
 
             if not isinstance(records, list):
                 print(
-                    "⚠️ Agmarknet returned invalid "
-                    "records format."
+                    "❌ Agmarknet returned "
+                    "invalid records"
                 )
-
-                return []
+                return None
 
             print(
-                f"✅ Agmarknet returned "
-                f"{len(records)} records"
+                f"✅ Real Agmarknet records: "
+                f"{len(records)}"
             )
 
-            if records:
-                MarketService._save_cache(
-                    state,
-                    records
-                )
+            cls._save_cache(
+                state,
+                district,
+                records
+            )
 
             return records
 
-        except requests.exceptions.Timeout:
-
+        except requests.Timeout:
             print(
-                "⏱️ Agmarknet request timed out."
+                f"⏱️ Agmarknet timeout after "
+                f"{cls.API_TIMEOUT_SECONDS}s"
             )
+            return None
 
-            return []
-
-        except requests.exceptions.RequestException as e:
-
+        except requests.RequestException as e:
             print(
                 f"❌ Agmarknet network error: {e}"
             )
+            return None
 
-            return []
+        except ValueError as e:
+            print(
+                f"❌ Agmarknet JSON error: {e}"
+            )
+            return None
 
         except Exception as e:
-
             print(
-                f"❌ Agmarknet parsing/error: {e}"
+                f"❌ Agmarknet unexpected error: {e}"
             )
-
-            return []
-
-    # ---------------------------------------------------------
-    # GET RECORDS
-    # ---------------------------------------------------------
-
-    @staticmethod
-    def _get_records(
-        state: str
-    ):
-        """
-        Cache-first strategy.
-
-        1. Fresh cache -> return immediately.
-        2. No fresh cache -> fetch Agmarknet.
-        3. If API fails -> stale cache.
-        """
-
-        # -------------------------------------------------
-        # 1. Fresh cache
-        # -------------------------------------------------
-
-        cached_records = MarketService._get_cached_records(
-            state
-        )
-
-        if cached_records:
-            return cached_records
-
-        # -------------------------------------------------
-        # 2. Refresh lock
-        # -------------------------------------------------
-
-        acquired = MarketService._refresh_lock.acquire(
-            timeout=1
-        )
-
-        if acquired:
-
-            try:
-
-                # Another request may have populated
-                # cache while we waited.
-
-                cached_records = (
-                    MarketService._get_cached_records(
-                        state
-                    )
-                )
-
-                if cached_records:
-                    return cached_records
-
-                # -------------------------------------------------
-                # 3. Fetch live Agmarknet data
-                # -------------------------------------------------
-
-                records = (
-                    MarketService._fetch_agmarknet_data(
-                        state
-                    )
-                )
-
-                if records:
-                    return records
-
-                # -------------------------------------------------
-                # 4. Stale cache fallback
-                # -------------------------------------------------
-
-                return MarketService._get_cached_records(
-                    state,
-                    allow_stale=True
-                )
-
-            finally:
-
-                MarketService._refresh_lock.release()
-
-        # -------------------------------------------------
-        # Lock wasn't acquired.
-        # Use existing stale cache if available.
-        # -------------------------------------------------
-
-        return MarketService._get_cached_records(
-            state,
-            allow_stale=True
-        )
+            return None
 
     # ---------------------------------------------------------
-    # CONVERT AGMARKNET RECORD -> MarketItem
+    # CATEGORY
     # ---------------------------------------------------------
 
     @staticmethod
+    def _get_category(
+        commodity: str
+    ) -> str:
+
+        name = commodity.lower()
+
+        vegetables = [
+            "tomato",
+            "onion",
+            "potato",
+            "brinjal",
+            "eggplant",
+            "carrot",
+            "beans",
+            "cabbage",
+            "cauliflower",
+            "cucumber",
+            "drumstick",
+            "ladies finger",
+            "okra",
+            "green chilli",
+            "chilli",
+            "bitter gourd",
+            "bottle gourd",
+            "pumpkin",
+            "beetroot",
+            "radish",
+            "garlic",
+            "ginger",
+        ]
+
+        grains = [
+            "paddy",
+            "rice",
+            "wheat",
+            "maize",
+            "corn",
+            "ragi",
+            "jowar",
+            "sorghum",
+            "bajra",
+            "millet",
+        ]
+
+        pulses = [
+            "tur",
+            "arhar",
+            "red gram",
+            "toor",
+            "urad",
+            "black gram",
+            "moong",
+            "green gram",
+            "chana",
+            "gram",
+            "horse gram",
+            "cowpea",
+        ]
+
+        spices = [
+            "turmeric",
+            "pepper",
+            "cumin",
+            "coriander",
+            "cardamom",
+            "clove",
+            "fenugreek",
+        ]
+
+        cash_crops = [
+            "cotton",
+            "sugarcane",
+            "groundnut",
+            "coconut",
+            "copra",
+            "tobacco",
+            "rubber",
+            "tapioca",
+            "castor",
+        ]
+
+        if any(x in name for x in vegetables):
+            return "Vegetables"
+
+        if any(x in name for x in grains):
+            return "Grains"
+
+        if any(x in name for x in pulses):
+            return "Pulses"
+
+        if any(x in name for x in spices):
+            return "Spices"
+
+        if any(x in name for x in cash_crops):
+            return "Cash Crops"
+
+        return "General"
+
+    # ---------------------------------------------------------
+    # AGMARKNET RECORD -> MarketItem
+    # ---------------------------------------------------------
+
+    @classmethod
     def _record_to_market_item(
-        item: dict,
-        user_state: str,
-        user_district: str
-    ) -> MarketItem:
+        cls,
+        record: dict
+    ) -> Optional[MarketItem]:
 
         commodity = str(
-            item.get(
-                "commodity",
-                "Crop"
-            )
+            record.get("commodity") or ""
         ).strip()
 
         market = str(
-            item.get(
-                "market",
-                "Mandi"
-            )
-        ).strip()
-
-        district = str(
-            item.get(
-                "district",
-                user_district
-            )
+            record.get("market") or ""
         ).strip()
 
         state = str(
-            item.get(
-                "state",
-                user_state
-            )
+            record.get("state") or ""
         ).strip()
 
-        # ---------------------------------------------
-        # Prices
-        # ---------------------------------------------
+        district = str(
+            record.get("district") or ""
+        ).strip()
+
+        arrival_date = str(
+            record.get("arrival_date") or ""
+        ).strip()
+
+        # No source commodity/market = reject
+        if not commodity or not market:
+            return None
+
+        # No arrival date = reject
+        if not arrival_date:
+            return None
 
         try:
             modal_price = float(
-                item.get(
-                    "modal_price",
-                    0
-                )
+                record.get("modal_price")
             )
-        except (ValueError, TypeError):
-            modal_price = 0.0
 
-        try:
             min_price = float(
-                item.get(
-                    "min_price",
-                    0
-                )
+                record.get("min_price")
             )
-        except (ValueError, TypeError):
-            min_price = 0.0
 
-        try:
             max_price = float(
-                item.get(
-                    "max_price",
-                    0
-                )
+                record.get("max_price")
             )
-        except (ValueError, TypeError):
-            max_price = 0.0
 
-        # ---------------------------------------------
-        # Date
-        # ---------------------------------------------
+        except (TypeError, ValueError):
+            return None
 
-        arrival_date = (
-            item.get("arrival_date")
-            or item.get("price_date")
-            or datetime.date.today().strftime(
-                "%d %b %Y"
-            )
-        )
-
-        # ---------------------------------------------
-        # Category
-        #
-        # We don't invent a category from the API.
-        # Keep "General" unless the app sends a category.
-        # ---------------------------------------------
-
-        category = "General"
+        # Never display invalid price
+        if (
+            modal_price <= 0
+            or min_price <= 0
+            or max_price <= 0
+        ):
+            return None
 
         return MarketItem(
             commodity=commodity,
-            category=category,
-            mandi_name=f"{market} ({district})",
+
+            # Category is only a UI classification
+            # based on the REAL commodity name.
+            category=cls._get_category(
+                commodity
+            ),
+
+            # Real mandi + real district
+            mandi_name=(
+                f"{market} ({district})"
+                if district
+                else market
+            ),
+
             state=state,
+
+            # Agmarknet daily prices are ₹/quintal
             unit="₹ / Quintal",
+
+            # REAL API values
             modal_price=modal_price,
             min_price=min_price,
             max_price=max_price,
+
+            # API doesn't provide a trustworthy
+            # 24-hour percentage in this response.
             price_trend="STABLE",
             price_change_24h_pct=0.0,
-            last_updated=str(arrival_date),
+
+            # REAL Agmarknet arrival date
+            last_updated=arrival_date,
         )
 
     # ---------------------------------------------------------
-    # MAIN MARKET FUNCTION
+    # MAIN METHOD
     # ---------------------------------------------------------
 
-    @staticmethod
+    @classmethod
     def get_live_market_rates(
+        cls,
         category: Optional[str] = None,
         query: Optional[str] = None,
         lat: Optional[float] = None,
@@ -595,39 +595,50 @@ class MarketService:
             "%d %b %Y"
         )
 
-        # -------------------------------------------------
+        # -----------------------------------------------------
         # LOCATION
-        # -------------------------------------------------
+        # -----------------------------------------------------
+
+        detected_state = None
+        detected_district = None
 
         if lat is not None and lon is not None:
 
             detected_state, detected_district = (
-                MarketService._get_location_from_coords(
+                cls._get_location_from_coords(
                     lat,
                     lon
                 )
             )
 
-            user_state = (
-                state
-                or detected_state
+        user_state = (
+            state
+            or detected_state
+        )
+
+        user_district = (
+            district
+            or detected_district
+        )
+
+        # IMPORTANT:
+        # Do NOT silently use Coimbatore/Tamil Nadu.
+        # If GPS/location is unavailable, return no data.
+        if not user_state or not user_district:
+
+            print(
+                "⚠️ Cannot determine farmer "
+                "state/district"
             )
 
-            user_district = (
-                district
-                or detected_district
-            )
-
-        else:
-
-            user_state = (
-                state
-                or "Tamil Nadu"
-            )
-
-            user_district = (
-                district
-                or "Coimbatore"
+            return MarketRatesResponse(
+                market_overview=(
+                    "Farmer location could not be "
+                    "identified. Market prices were "
+                    "not displayed."
+                ),
+                date=today_str,
+                commodities=[]
             )
 
         user_state = str(
@@ -638,26 +649,53 @@ class MarketService:
             user_district
         ).strip()
 
-        normalized_district = (
-            MarketService._normalize_name(
-                user_district
-            )
-        )
-
         print(
-            f"📍 Market request location: "
+            f"📍 Market location: "
             f"{user_district}, {user_state}"
         )
 
-        # -------------------------------------------------
-        # GET RECORDS
-        # -------------------------------------------------
+        # -----------------------------------------------------
+        # CACHE FIRST
+        # -----------------------------------------------------
 
-        records = MarketService._get_records(
-            user_state
+        records = cls._get_cached_records(
+            user_state,
+            user_district
         )
 
+        # -----------------------------------------------------
+        # FETCH REAL DATA
+        # -----------------------------------------------------
+
+        if records is None:
+
+            records = cls._fetch_agmarknet_data(
+                user_state,
+                user_district
+            )
+
+        # -----------------------------------------------------
+        # STALE CACHE ONLY FOR SAME DISTRICT
+        # -----------------------------------------------------
+
+        if records is None:
+
+            records = cls._get_cached_records(
+                user_state,
+                user_district,
+                allow_stale=True
+            )
+
+        # -----------------------------------------------------
+        # NO DATA
+        # -----------------------------------------------------
+
         if not records:
+
+            print(
+                f"⚠️ No Agmarknet data for "
+                f"{user_district}, {user_state}"
+            )
 
             return MarketRatesResponse(
                 market_overview=(
@@ -669,126 +707,71 @@ class MarketService:
                 commodities=[]
             )
 
-        # -------------------------------------------------
-        # DISTRICT FILTER
-        # -------------------------------------------------
+        # -----------------------------------------------------
+        # STRICT DISTRICT CHECK
+        # -----------------------------------------------------
 
-        district_records = []
+        requested_district = (
+            cls._normalize_name(
+                user_district
+            )
+        )
 
-        for item in records:
+        commodities: List[MarketItem] = []
+
+        for record in records:
 
             record_district = (
-                MarketService._normalize_name(
-                    item.get(
-                        "district",
-                        ""
-                    )
-                )
+                str(
+                    record.get("district") or ""
+                ).strip()
             )
 
-            if not record_district:
-                continue
-
-            # Exact district match
-            if (
-                record_district
-                == normalized_district
-            ):
-                district_records.append(item)
-                continue
-
-            # Contains match
-            if (
-                normalized_district
-                and (
-                    normalized_district
-                    in record_district
-                    or
+            normalized_record_district = (
+                cls._normalize_name(
                     record_district
-                    in normalized_district
                 )
+            )
+
+            # NEVER show another district.
+            if (
+                requested_district
+                != normalized_record_district
             ):
-                district_records.append(item)
+                continue
 
-        # -------------------------------------------------
-        # IMPORTANT:
-        # Don't silently show another district's price.
-        # User specifically wants local/district data.
-        # -------------------------------------------------
-
-        if not district_records:
-
-            print(
-                f"⚠️ No matching Agmarknet records "
-                f"found for district: "
-                f"{user_district}"
+            item = cls._record_to_market_item(
+                record
             )
 
-            return MarketRatesResponse(
-                market_overview=(
-                    f"Agmarknet data for "
-                    f"{user_district}, "
-                    f"{user_state} is not available "
-                    f"in the current dataset."
-                ),
-                date=today_str,
-                commodities=[]
-            )
+            if item:
+                commodities.append(item)
 
-        # -------------------------------------------------
-        # CONVERT RECORDS
-        # -------------------------------------------------
-
-        commodities = []
-
-        for item in district_records:
-
-            try:
-
-                market_item = (
-                    MarketService._record_to_market_item(
-                        item,
-                        user_state,
-                        user_district
-                    )
-                )
-
-                commodities.append(
-                    market_item
-                )
-
-            except Exception as e:
-
-                print(
-                    f"⚠️ Skipping invalid "
-                    f"market record: {e}"
-                )
-
-        # -------------------------------------------------
+        # -----------------------------------------------------
         # CATEGORY FILTER
-        # -------------------------------------------------
-
-        # Your current API doesn't provide a reliable
-        # category field in the Agmarknet response,
-        # so don't incorrectly remove records based
-        # on category.
+        # -----------------------------------------------------
 
         if (
             category
             and category.lower() != "all"
         ):
 
-            # If query is used, it will still work.
-            # Category filtering is intentionally not
-            # applied because source category isn't
-            # available reliably.
-            pass
+            requested_category = (
+                category.strip().lower()
+            )
 
-        # -------------------------------------------------
+            commodities = [
+                item
+                for item in commodities
+                if item.category.lower()
+                == requested_category
+            ]
+
+        # -----------------------------------------------------
         # SEARCH FILTER
-        # -------------------------------------------------
+        # -----------------------------------------------------
 
-        if query and query.strip():
+        if query:
 
             q = query.strip().lower()
 
@@ -802,9 +785,9 @@ class MarketService:
                 )
             ]
 
-        # -------------------------------------------------
+        # -----------------------------------------------------
         # REMOVE DUPLICATES
-        # -------------------------------------------------
+        # -----------------------------------------------------
 
         unique = {}
 
@@ -812,7 +795,9 @@ class MarketService:
 
             key = (
                 item.commodity.lower(),
-                item.mandi_name.lower()
+                item.mandi_name.lower(),
+                item.last_updated,
+                item.modal_price,
             )
 
             unique[key] = item
@@ -821,44 +806,31 @@ class MarketService:
             unique.values()
         )
 
-        # -------------------------------------------------
-        # SORT BY MANDI + COMMODITY
-        # -------------------------------------------------
+        # -----------------------------------------------------
+        # SORT
+        # -----------------------------------------------------
 
         commodities.sort(
             key=lambda x: (
-                x.mandi_name.lower(),
-                x.commodity.lower()
+                x.commodity.lower(),
+                x.mandi_name.lower()
             )
         )
 
-        # -------------------------------------------------
-        # CACHE AGE
-        # -------------------------------------------------
-
-        cache_age = (
-            MarketService._cache_age_hours(
-                user_state
-            )
-        )
-
-        if cache_age is None:
-            source_text = "Agmarknet"
-        else:
-            source_text = (
-                f"Agmarknet data "
-                f"(cache {int(cache_age * 60)} min old)"
-            )
-
-        overview = (
-            f"{source_text}: "
-            f"{len(commodities)} market records "
-            f"for {user_district}, "
-            f"{user_state}."
+        print(
+            f"📊 Returning "
+            f"{len(commodities)} REAL Agmarknet "
+            f"records for "
+            f"{user_district}, {user_state}"
         )
 
         return MarketRatesResponse(
-            market_overview=overview,
+            market_overview=(
+                f"Agmarknet market prices for "
+                f"{user_district}, {user_state}. "
+                f"Prices shown are from the latest "
+                f"available mandi records."
+            ),
             date=today_str,
             commodities=commodities
         )
@@ -867,35 +839,23 @@ class MarketService:
     # BACKGROUND REFRESH
     # ---------------------------------------------------------
 
-    @staticmethod
+    @classmethod
     def refresh_state_cache(
-        state: str
+        cls,
+        state: str = "Tamil Nadu"
     ):
+        """
+        Deliberately does nothing.
+
+        We DO NOT fetch the entire Tamil Nadu dataset
+        in the background because that was causing the
+        Render timeout.
+
+        Real data is fetched for the user's district
+        when /api/market-rates is requested.
+        """
 
         print(
-            f"🔄 Background refresh started "
-            f"for {state}"
+            f"ℹ️ Agmarknet background refresh skipped "
+            f"for whole state: {state}"
         )
-
-        records = (
-            MarketService._fetch_agmarknet_data(
-                state
-            )
-        )
-
-        if records:
-
-            print(
-                f"✅ Background refresh completed "
-                f"for {state}: "
-                f"{len(records)} records"
-            )
-
-            return True
-
-        print(
-            f"⚠️ Background refresh failed "
-            f"for {state}"
-        )
-
-        return False
