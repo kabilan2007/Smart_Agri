@@ -91,10 +91,9 @@ def _background_market_refresher():
                     f"fetching Agmarknet data for {state}..."
                 )
 
-                # IMPORTANT:
-                # Do NOT pass district=state.
-                #
-                # This refreshes the state cache only.
+                # This only refreshes the cache.
+                # API requests will still use strict
+                # district filtering.
                 MarketService.refresh_state_cache(
                     state
                 )
@@ -165,12 +164,15 @@ async def health_check():
 
     return {
         "status": "healthy",
+
         "gemini_configured": bool(
             settings.GEMINI_API_KEY
         ),
+
         "weather_configured": bool(
             settings.OPENWEATHER_API_KEY
         ),
+
         "agmarknet_configured": bool(
             os.getenv(
                 "AGMARKNET_API_KEY",
@@ -466,11 +468,12 @@ def get_market_rates(
         None,
         description="Farmer Location Name"
     )
+
 ):
 
     """
-    Returns Agmarknet market prices for the
-    farmer's district.
+    Returns actual Agmarknet market prices
+    for the farmer's detected/local district.
 
     Flow:
 
@@ -478,11 +481,13 @@ def get_market_rates(
               ↓
         latitude / longitude
               ↓
+        reverse geocoding
+              ↓
         state + district
               ↓
-        Agmarknet cache
+        Agmarknet
               ↓
-        district filtering
+        STRICT district filtering
               ↓
         actual mandi prices
     """
@@ -515,7 +520,8 @@ def get_market_rates(
 
         final_district = (
             district
-            or location_name
+            if district is not None
+            else None
         )
 
         # -------------------------------------------------
@@ -529,7 +535,8 @@ def get_market_rates(
                 lat=final_lat,
                 lon=final_lon,
                 state=state,
-                district=final_district
+                district=final_district,
+                location_name=location_name
             )
         )
 
